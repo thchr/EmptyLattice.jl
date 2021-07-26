@@ -1,5 +1,5 @@
-using EmptyLattice, Crystalline
-sgnum = 230
+using EmptyLattice, Crystalline, Brillouin
+sgnum = 147
 has_tr = true
 
 lgs = get_littlegroups(sgnum)
@@ -11,20 +11,30 @@ Rs = directbasis(sgnum, Val(3))
 Gs = reciprocalbasis(Rs)
 pGs = primitivize(Gs, centering(sgnum, 3))
 
-## ---
-klab = "Σ"
-#for klab in keys(plgs)# "P"
-    ωs, symeigs = empty_lattice_symeigs(plgs[klab], pGs; digit_tol=10, Nfreq=1)
-    ns = find_representation.(symeigs, Ref(lgirsd[klab]), verbose=true)
+# ---
+Nfreq = 10
+irsd = Dict{String, Vector{Pair{Float64, String}}}()
+for (klab, plg) in plgs
+    kv = kvec(plg)
+    symeig_ωs, symeig_degens = unique_spectrum(kv, pGs; Nfreq=Nfreq)
+    _, symeigs = symmetries(plg, pGs; Nfreq=Nfreq)
+    ns = find_representation.(symeigs, Ref(lgirsd[klab]), Ref(Crystalline.TEST_αβγs[3]))
     irlabs = Crystalline.formatirreplabel.(label.(lgirsd[klab]))
+    irs_str = Crystalline.symvec2string.(ns, Ref(irlabs); braces=false)
+    irsd[klab] = [ω => s*" ($d-fold degenerate)" for (ω,d,s) in zip(symeig_ωs, symeig_degens, irs_str)]
 
-    println("--- ", klab, " = ", kvec(plgs[klab]), " ---")
-    println(ωs)
-    println(symeigs)
-    try
-        println.(Crystalline.symvec2string.(ns, Ref(irlabs); braces=false))
-    catch
-        println("failed...")
-    end
+    println("--- ", klab, " = ", kv, " ---")
+    println.(irs_str)
     println()
-#end
+end
+
+## --------------------------------------------------------------------------------------- #
+using Brillouin, PlotlyJS
+
+kp = irrfbz_path(sgnum, Rs)
+kpi = interpolate(kp, 1000)
+ωs = spectrum.(kpi, Ref(pGs); Nfreq=50)
+ωs = vcat(ωs'...) # remake as matrix...
+layout = deepcopy(Brillouin.DEFAULT_PLOTLY_LAYOUT_DISPERSION)
+delete!(layout.fields, :width); delete!(layout.fields, :height)
+plot(kpi, ωs, layout; ylims=(0,1.25), annotations=irsd)

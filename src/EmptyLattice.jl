@@ -3,8 +3,7 @@ module EmptyLattice
 
 using StaticArrays, Crystalline, LinearAlgebra
 
-export empty_lattice_freqs, empty_lattice_symeigs
-
+export spectrum, unique_spectrum, symmetries
 # ---------------------------------------------------------------------------------------- #
 
 function kv_plus_Gv(kv::SVector{D,<:Real}, I::CartesianIndex{D}, Gs::ReciprocalBasis{D}) where D
@@ -19,28 +18,32 @@ function kv_plus_Gv(kv::SVector{D,<:Real}, I::CartesianIndex{D}, Gs::ReciprocalB
     end
 end
 
-function _uniqify!(ωs::Vector{<:Real}, Nfreq::Integer; digit_tol::Integer = 10)
+function _uniqify!(ωs::Vector{<:Real}, Nfreq::Integer; 
+            digit_tol::Integer = 10, issorted::Bool=false)
     map!(ω->round(ω; digits=digit_tol), ωs, ωs)
-    ωs_unique = unique(sort(ωs))
-    if length(ωs_unique) < Nfreq
+    ωs′ = issorted ? unique(ωs) : unique(sort(ωs))
+    if length(ωs′) < Nfreq
         error("too few unique frequencies: increase maxN or reduce Nfreq")
     end
-    return resize!(ωs_unique, Nfreq)
+    return resize!(ωs′, Nfreq)
 end
 
 # ---------------------------------------------------------------------------------------- #
 
 """
-    empty_lattice_freqs(kv, Gs; maxN=5, Nfreq=5, digit_tol=10, verbose=false)
+    spectrum(kv, Gs; maxN=5, Nfreq=5, digit_tol=10, verbose=false)
 
-Return the `Nfreq` lowest (normalized) eigenfrequencies at momentum `kv` for a lattice with
-reciprocal basis `Gs`, as well as the degeneracies of each unique eigenfrequency within
-`digit_tol` digits of accuracy.
-Note that `kv` must be given in the basis of `Gs`.
+Return the `Nfreq` lowest (normalized) empty-lattice eigenfrequencies at momentum
+`kv` for a lattice with (primitive) reciprocal basis `Gs::ReciprocalBasis` or direct basis
+`Rs::DirectBasis`.
+
+Note that `kv` must be given in the basis of associated reciprocal basis `Gs`.
+
+See also [`unique_spectrum`](@ref) to get the *unique* eigenfrequencies and their
+degeneracies.
 """
-function empty_lattice_freqs(kv::SVector{D, <:Real}, Gs::ReciprocalBasis{D};
-            maxN::Integer=5, Nfreq::Integer=5, digit_tol::Integer=10, verbose::Bool=false
-            ) where D
+function spectrum(kv::SVector{D, <:Real}, Gs::ReciprocalBasis{D};
+            maxN::Integer=5, Nfreq::Integer=(2maxN+1)^D) where D
 
     Ns = -maxN:maxN
     Nk = (2maxN+1)^D
@@ -50,7 +53,29 @@ function empty_lattice_freqs(kv::SVector{D, <:Real}, Gs::ReciprocalBasis{D};
         kvG = kv_plus_Gv(kv, I, Gs)
         ωs[idx] = norm(kvG)/(2π)
     end
-    ωs_unique = _uniqify!(ωs, Nfreq; digit_tol = 10)
+    
+    return resize!(sort!(ωs), Nfreq)
+end
+
+"""
+    unique_spectrum(kv, Gs; maxN=5, Nfreq=5, digit_tol=10, verbose=false)
+
+Return the `Nfreq` lowest (normalized) unique empty-lattice eigenfrequencies at momentum
+`kv` for a lattice with (primitive) reciprocal basis `Gs::ReciprocalBasis` or direct basis
+`Rs::DirectBasis` and the associated degeneracies of each unique eigenfrequency (within
+`digit_tol` digits of accuracy).
+
+Note that `kv` must be given in the basis of associated reciprocal basis `Gs`.
+
+See also [`spectrum`](@ref) to get the *all* eigenfrequencies, including multiplicities.
+"""
+function unique_spectrum(kv::SVector{D, <:Real}, Gs::ReciprocalBasis{D};
+            maxN::Integer=5, Nfreq::Integer=5, digit_tol::Integer=10, verbose::Bool=false
+            ) where D
+
+    ωs = spectrum(kv, Gs; maxN=maxN)
+    # also rounds `ωs` to `digit_tol` digits
+    ωs_unique = _uniqify!(ωs, Nfreq; digit_tol = 10, issorted=true)
 
     degens = Vector{Int}(undef, Nfreq)
     for (n, ω) in enumerate(ωs_unique)
@@ -62,25 +87,28 @@ function empty_lattice_freqs(kv::SVector{D, <:Real}, Gs::ReciprocalBasis{D};
     end
     return ωs_unique, degens
 end
-function empty_lattice_freqs(kv::SVector{D, <:Real}, Rs::DirectBasis{D}; kwargs...) where D
-    return empty_lattice_freqs(kv, reciprocalbasis(Rs); kwargs...)
-end
-function empty_lattice_freqs(kv::SVector{D, <:Real}, sgnum::Integer; kwargs...) where D
-    Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
-    return empty_lattice_freqs(kv, Rs; kwargs...)
-end
-function empty_lattice_freqs(kv::KVec{D}, Vs::Union{ReciprocalBasis{D}, DirectBasis{D}};
-            αβγ=Crystalline.TEST_αβγs[D], kwargs...) where D
-    return empty_lattice_freqs(kv(αβγ), Vs; kwargs...)
-end
-function empty_lattice_freqs(kv::KVec{D}, sgnum::Integer; 
-            αβγ=Crystalline.TEST_αβγs[D], kwargs...) where D
-    return empty_lattice_freqs(kv(αβγ), sgnum; kwargs...)
+
+for f in (:spectrum, :unique_spectrum)
+    @eval function $f(kv::SVector{D, <:Real}, Rs::DirectBasis{D}; kwargs...) where D
+        return $f(kv, reciprocalbasis(Rs); kwargs...)
+    end
+    @eval function $f(kv::SVector{D, <:Real}, sgnum::Integer; kwargs...) where D
+        Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+        return $f(kv, Rs; kwargs...)
+    end
+    @eval function $f(kv::KVec{D}, Vs::Union{ReciprocalBasis{D}, DirectBasis{D}};
+                αβγ=Crystalline.TEST_αβγs[D], kwargs...) where D
+        return $f(kv(αβγ), Vs; kwargs...)
+    end
+    @eval function $f(kv::KVec{D}, sgnum::Integer; 
+                αβγ=Crystalline.TEST_αβγs[D], kwargs...) where D
+        return $f(kv(αβγ), sgnum; kwargs...)
+    end
 end
 
 # ---------------------------------------------------------------------------------------- #
 
-function empty_lattice_symeigs(
+function symmetries(
             lg::LittleGroup{D}, Gs::ReciprocalBasis{D};
             maxN::Integer=5, Nfreq::Integer=5, digit_tol::Integer=10, verbose::Bool=true,
             αβγ=Crystalline.TEST_αβγs[D],
@@ -102,7 +130,7 @@ function empty_lattice_symeigs(
     end
     # TODO: Be more careful: if `ωs` doesn't include _all_ degenerate branches of a
     #       frequency, we will be in trouble
-    ωs_unique = _uniqify!(ωs, Nfreq; digit_tol = 10)
+    ωs_unique = _uniqify!(ωs, Nfreq; digit_tol = 10) # also rounds `ωs` to `digit_tol` digits
 
     lg⁻¹ = inv.(lg) # group operations act inversely on function arguments
     Gm = hcat(Gs...)
