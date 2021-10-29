@@ -2,9 +2,9 @@ using EmptyLattice, Crystalline, Brillouin
 sgnum = 147
 has_tr = true
 
-lgs = get_littlegroups(sgnum)
+lgs = littlegroups(sgnum)
 plgs = Dict(klab=>primitivize(lg, false) for (klab, lg) in lgs)
-lgirsd = get_lgirreps(sgnum)
+lgirsd = lgirreps(sgnum)
 has_tr && (lgirsd = Dict(klab => realify(lgirs) for (klab, lgirs) in lgirsd))
 
 Rs = directbasis(sgnum, Val(3))
