@@ -114,7 +114,7 @@ function symmetries(
             αβγ=Crystalline.TEST_αβγs[D],
             flip_ksign::Bool=true) where D
 
-    kv = kvec(lg)(αβγ)                          # reciprocal lattice basis
+    kv = position(lg)(αβγ)                     # reciprocal lattice basis
     if flip_ksign # trickery to fix issue with ISOTROPY lgirrep phase convention
         kv = -kv
     end

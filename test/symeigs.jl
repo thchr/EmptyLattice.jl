@@ -15,14 +15,14 @@ pGs = primitivize(Gs, centering(sgnum, 3))
 Nfreq = 10
 irsd = Dict{String, Vector{Pair{Float64, String}}}()
 for (klab, plg) in plgs
-    kv = kvec(plg)
+    kv = position(plg)
     symeig_ωs, symeig_degens = unique_spectrum(kv, pGs; Nfreq=Nfreq)
     _, symeigs = symmetries(plg, pGs; Nfreq=Nfreq)
     ns = find_representation.(symeigs, Ref(lgirsd[klab]), Ref(Crystalline.TEST_αβγs[3]))
-    irlabs = Crystalline.formatirreplabel.(label.(lgirsd[klab]))
+    irlabs = label.(lgirsd[klab])
     irs_str = Crystalline.symvec2string.(ns, Ref(irlabs); braces=false)
-    irsd[klab] = [ω => s*" ($d-fold degenerate)" for (ω,d,s) in zip(symeig_ωs, symeig_degens, irs_str)]
-
+    irsd[klab] = [ω => s*" ($d-fold degenerate)" for 
+                                        (ω,d,s) in zip(symeig_ωs, symeig_degens, irs_str)]
     println("--- ", klab, " = ", kv, " ---")
     println.(irs_str)
     println()
