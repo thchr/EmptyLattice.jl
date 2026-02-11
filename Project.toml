@@ -1,7 +1,7 @@
 name = "EmptyLattice"
 uuid = "1a029c52-ef54-45e5-ba85-91c51d139017"
-authors = ["Thomas Christensen <tchr@mit.edu> and contributors"]
 version = "0.1.0"
+authors = ["Thomas Christensen <tchr@mit.edu> and contributors"]
 
 [deps]
 Crystalline = "ae5e2be0-a263-11e9-351e-f94dad1eb351"
@@ -9,9 +9,8 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-julia = "1.6"
-Crystalline = "0.4.16"
-
+julia = "1.10"
+Crystalline = "0.6.23"
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
