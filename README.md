@@ -35,8 +35,9 @@ annotations = collect_irrep_annotations(brs, Gs, polarization; Nfreq = size(freq
 
 # visualize
 using GLMakie
-plot(kpi, freqs; annotations, ylims=(0,2), figure=(; size=(300, 800)))
+plot(kpi, freqs; annotations, ylims=(0,2), figure=(; size=(400, 600)))
 ```
 
-Which produces the plot below:
-![Empty-lattice dispersion in plane group *p*4](assets/p4-empty-lattice-dispersion.png)
+Which produces the following visualization of the empty-lattice band structure:
+
+<img src="assets/p4-empty-lattice-dispersion.png" alt="Empty-lattice dispersion in plane group <it>p</it>4" width="400"/>
