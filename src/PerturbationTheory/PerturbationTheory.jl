@@ -13,13 +13,15 @@ using StaticArrays, Crystalline, LinearAlgebra
 
 export gamma_matrix, gamma_matrices
 export symmetry_adapted_coefficients
-export geometric_factor, geometric_factors, frequency_shift
+export geometric_factor, geometric_factors, frequency_shift, frequency_shifts
+export FrequencyShift, FrequencyShifts
 
 # ---------------------------------------------------------------------------------------- #
 
 include("polarizations.jl")
 include("gamma_rep.jl")
 include("coefficients.jl")
+include("perturbation_results.jl")
 include("frequency_shifts.jl")
 
 # ---------------------------------------------------------------------------------------- #

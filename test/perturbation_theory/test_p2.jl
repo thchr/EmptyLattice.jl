@@ -1,18 +1,26 @@
-# Test: plane group p2 (sgnum=2 in 2D), TM polarization.
+# Test: plane group p2 (sgnum=2 in 2D), Y-point, TM and TE polarization.
 #
 # Analytical results from main.tex (p2 section):
-#   G = {E, C₂}.  At X, Y, M: 2-fold degenerate orbit {q₁, q₂} connected by G-vector b.
+#   G = {E, C₂}.  At Y: 2-fold degenerate orbit {q₁, q₂} with q₂ = -q₁.
 #   Two irreps A (symmetric) and B (antisymmetric):
 #     c^(A) = [1, 1] / √2,  c^(B) = [1, -1] / √2.
-#   Frequency shifts (Δε at ±b, amplitude Δε₀):
+#   TM frequency shifts (Δε at ±b, amplitude Δε₀):
 #     Δω^(A) = -(ω / 2ε) Δε₀   (shifts down)
 #     Δω^(B) = +(ω / 2ε) Δε₀   (shifts up)
+#
+#   TE frequency shifts: Since q₂ = -q₁, the TE overlap ê_{q₂}†ê_{q₁} = q̂₂·q̂₁ = -1.
+#   All geometric factors f_b gain a sign flip relative to TM:
+#     Δω_TE^(A) = +(ω / 2ε) Δε₀   (opposite sign from TM)
+#     Δω_TE^(B) = -(ω / 2ε) Δε₀
+#
+#   Note: p2 contains only proper rotations (det W = 1 for all g ∈ G_k), so ξ(g) = 1
+#   and the Γ matrices are identical for TM and TE.
 
-using Test, StaticArrays, Crystalline, LinearAlgebra
+using Test, Crystalline, LinearAlgebra
 using EmptyLattice
 using EmptyLattice.PerturbationTheory
 
-@testset "p2 (TM)" begin
+@testset "p2 Y-point (TM and TE)" begin
     sgnum = 2  # plane group p2
     D = 2
 
@@ -20,18 +28,8 @@ using EmptyLattice.PerturbationTheory
     Gs = reciprocalbasis(Rs)
 
     lgirsd = lgirreps(sgnum, Val(D))
-
-    # p2 has |G_k| = 2 at X, Y, M with two 1D irreps each.
-    # Pick the first such k-point (typically "X" or "Y" in CDML labeling).
-    kkeys = collect(keys(lgirsd))
-    klab_idx = findfirst(
-        kl -> length(lgirsd[kl]) == 2 && all(irdim(ir) == 1 for ir in lgirsd[kl]),
-        kkeys
-    )
-    @test klab_idx !== nothing
-    lgirs = lgirsd[kkeys[klab_idx]]
-
-    kv = SVector{2,Float64}(position(lgirs[1])())
+    lgirs = lgirsd["Y"]
+    kv = position(lgirs[1])()
 
     # --- Orbit from unique_spectrum ---
     ωs, kvGsv = unique_spectrum(kv, Gs; Nfreq=4)
@@ -40,16 +38,10 @@ using EmptyLattice.PerturbationTheory
     orbit = kvGsv[orbit_idx]
     ω_kv  = ωs[orbit_idx]
 
-    @test length(orbit) == 2
-
     # --- Little group ---
     lg = group(lgirs[1])
-    @test length(lg) == 2  # G_k = {E, C₂} for X, Y, M in p2
 
-    # p2 contains only proper rotations (det W = 1 for all g ∈ G_k)
-    @test all(det(rotation(g)) ≈ 1 for g in lg)
-
-    # --- Γ matrices ---
+    # --- Γ matrices (TM) ---
     Γs = gamma_matrices(orbit, lg; polarization=:TM)
     @test length(Γs) == 2
     @test all(size(Γ) == (2, 2) for Γ in Γs)
@@ -60,10 +52,14 @@ using EmptyLattice.PerturbationTheory
     @test E_idx !== nothing
     @test Γs[E_idx] ≈ I
 
-    # Γ(C₂) should be the swap matrix (with a possible phase for nonsymmorphic groups)
-    C2_idx = 3 - E_idx  # the other one
-    @test abs(Γs[C2_idx][1, 1]) < 1e-10   # diagonal entries zero
+    # Γ(C₂) is off-diagonal (swaps the two orbit points)
+    C2_idx = 3 - E_idx
+    @test abs(Γs[C2_idx][1, 1]) < 1e-10
     @test abs(Γs[C2_idx][2, 2]) < 1e-10
+
+    # p2 has only proper rotations: TE Γ = TM Γ (ξ(g) = det(W) = 1 for all g)
+    Γs_TE = gamma_matrices(orbit, lg; polarization=:TE)
+    @test all(Γs_TE[i] ≈ Γs[i] for i in eachindex(Γs))
 
     # --- Symmetry-adapted coefficients ---
     cs_all = [symmetry_adapted_coefficients(lgir, Γs) for lgir in lgirs]
@@ -72,20 +68,23 @@ using EmptyLattice.PerturbationTheory
     @test all(norm(c) ≈ 1.0 for c in cs)
     @test abs(dot(cs[1], cs[2])) < 1e-10  # orthogonal
 
-    # --- Frequency shifts ---
-    b = orbit[2] .- orbit[1]   # connecting G-vector
+    # --- TM frequency shifts ---
+    b = orbit[2] .- orbit[1]
     Δε₀ = 0.5
     Δε_fourier = Dict(b => Δε₀, -b => Δε₀)
 
-    Δωs = [real(frequency_shift(c, orbit, Δε_fourier, ω_kv)) for c in cs]
+    Δωs_TM = [real(frequency_shift(c, orbit, Δε_fourier, ω_kv)) for c in cs]
 
-    # A and B irreps shift in equal magnitude, opposite sign
-    @test Δωs[1] ≈ -Δωs[2]  atol=1e-10
-    @test abs(Δωs[1]) ≈ (ω_kv / 2) * Δε₀  atol=1e-10
+    # A and B irreps: equal magnitude, opposite sign
+    @test Δωs_TM[1] ≈ -Δωs_TM[2]  atol=1e-10
+    @test abs(Δωs_TM[1]) ≈ (ω_kv / 2) * Δε₀  atol=1e-10
 
-    # NOTE: for TE polarization, the overlap ê_{q'}†(Rê_q) = det(R) = det(W).
-    # Since p2 has only proper rotations, det(W) = 1 for all g, so TE and TM
-    # give identical Γ matrices and frequency shifts for this group.
-    Γs_TE = gamma_matrices(orbit, lg; polarization=:TE)
-    @test all(Γs_TE[i] ≈ Γs[i] for i in eachindex(Γs))
+    # --- TE frequency shifts ---
+    # q₂ = -q₁ in this orbit, so TE overlap ê_{q₂}†ê_{q₁} = q̂₂·q̂₁ = -1:
+    # all geometric factors f_b flip sign relative to TM.
+    Δωs_TE = [real(frequency_shift(c, orbit, Δε_fourier, ω_kv; Gs, polarization=:TE))
+              for c in cs]
+
+    @test Δωs_TE[1] ≈ -Δωs_TM[1]  atol=1e-10
+    @test Δωs_TE[2] ≈ -Δωs_TM[2]  atol=1e-10
 end
