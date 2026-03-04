@@ -353,19 +353,6 @@ function collect_irreps(
     return irmultsv
 end
 
-# TODO: Debug M point, second frequency, wrong symeigs. Compare:
-#=
-brs = primitivize(calc_bandreps(17, 2))
-Gs = reciprocalbasis(primitivize(directbasis(17,2), centering(17, 2)))
-EmptyLattice.planewave_symeigs(lg, Gs, :TM)
-characters(irreps(brs)[1])
-
-and see also:
-lg = group(irreps(brs)[1]) # M point
-kv = position(lg)() # [1/2, 0]
-unique_spectrum(kv, Gs) # second element of `kvGsv`
-=#
-
 function Crystalline.collect_irrep_annotations(
     brs::Collection{NewBandRep{D}},
     Gs::ReciprocalBasis{D},
