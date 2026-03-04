@@ -8,6 +8,7 @@ export spectrum, unique_spectrum, symmetries
 # ---------------------------------------------------------------------------------------- #
 
 include("fincke-pohst-enumeration.jl")
+include("PerturbationTheory/PerturbationTheory.jl")
 
 # ---------------------------------------------------------------------------------------- #
 
