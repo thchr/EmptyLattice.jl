@@ -22,8 +22,8 @@
 Return the index j such that `kvGsv[j] ≈ q`, or `nothing` if no match is found.
 """
 function find_orbit_index(q, kvGsv; atol::Real = 1e-10)
-    for (j, q_j) in enumerate(kvGsv)
-        isapprox(q, q_j; atol) && return j
+    for (j, qⱼ) in enumerate(kvGsv)
+        isapprox(q, qⱼ; atol) && return j
     end
     return nothing
 end
@@ -60,12 +60,12 @@ end
 Construct the `norb × norb` Γ representation matrix for symmetry operation `g` acting
 on the orbit `kvGsv` (q-vectors in **fractional reciprocal coordinates**).
 
-`Γ[j, i]` is the matrix element ⟨q_j | T(g) | q_i⟩ (in the TM/TE plane-wave basis):
+`Γ[j, i]` is the matrix element qⱼ | T(g) | qᵢ (in the TM/TE plane-wave basis):
 it is nonzero only when g maps the orbit point `kvGsv[i]` to (approximately) `kvGsv[j]`.
 
 ## Formula
 ```
-Γ[j, i](g) = δ_{q_j, (W⁻¹)ᵀ q_i} · cispi(2 · dot(q_i, translation(inv(g)))) · pol_factor
+Γ[j, i](g) = δ_{qⱼ, (W⁻¹)ᵀ qᵢ} · cispi(2 · dot(qᵢ, translation(inv(g)))) · pol_factor
 ```
 where `pol_factor` = 1 for `:TM`, `det(W)` for `:TE`.
 
@@ -81,8 +81,7 @@ function gamma_matrix(
     polarization::Union{Symbol, Nothing} = :TM,
     atol::Real = 1e-10,
 ) where D
-    norb = length(kvGsv)
-    Γ = zeros(ComplexF64, norb, norb)
+    Γ = zeros(ComplexF64, length(kvGsv), length(kvGsv)) # TODO: generalize to D == 3?
 
     g_inv   = inv(g)
     W_inv   = rotation(g_inv)    # W⁻¹ in fractional direct coords
@@ -91,15 +90,12 @@ function gamma_matrix(
     W = rotation(g)
     pol = _polarization_overlap(W, polarization)
 
-    for i in 1:norb
-        q_i = kvGsv[i]
-        # q' = (W⁻¹)ᵀ q_i: image of q_i under g in fractional reciprocal coords
-        q_prime = W_inv' * q_i
-        j = find_orbit_index(q_prime, kvGsv; atol)
-        j === nothing && continue  # g sends q_i outside orbit (should not happen for g ∈ G_k)
-
-        # phase = exp(-2πi q_i · W⁻¹w) = cispi(2 · dot(q_i, translation(inv(g))))
-        phase = cispi(2 * real(dot(q_i, w_inv)))
+    for (i, qᵢ) in enumerate(kvGsv)
+        # q' = (W⁻¹)ᵀ qᵢ: image of qᵢ under g in fractional reciprocal coords
+        q′ = W_inv' * qᵢ
+        j = find_orbit_index(q′, kvGsv; atol)
+        j === nothing && continue  # g sends qᵢ outside orbit (should not happen for g ∈ G_k)
+        phase = cispi(2 * dot(qᵢ, w_inv)) # = exp(-2πi qᵢ · W⁻¹w)
 
         Γ[j, i] = phase * pol
     end
@@ -129,4 +125,58 @@ function gamma_matrices(
     kwargs...
 ) where D
     return [gamma_matrix(g, kvGsv; kwargs...) for g in lg]
+end
+
+"""
+    b_vector_orbits(kvGsv, lg; atol=1e-10)
+        -> Vector{Tuple{SVector{D,Float64}, Vector{SVector{D,Float64}}}}
+
+Find symmetry orbits of connecting b-vectors `b = qⱼ - qᵢ` (i ≠ j) under the little
+group `lg`.
+
+The little group G_k acts on b-vectors in **fractional reciprocal coordinates** as:
+```
+g maps b ↦ (W⁻¹)ᵀ b    (W = rotation(g) in fractional direct coordinates)
+```
+
+Returns a `Vector` of `(canonical_b, orbit_bs)` pairs, one per distinct orbit, where
+`canonical_b` is the first-encountered representative and `orbit_bs` lists all b-vectors
+in the orbit (including `canonical_b` itself).
+
+# Arguments
+- `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
+- `lg`: little group of the k-point
+- `atol`: tolerance for approximate b-vector equality
+"""
+function b_vector_orbits(
+    kvGsv::AbstractVector{<:StaticVector{D}},
+    lg::LittleGroup{D};
+    atol::Real = 1e-10,
+) where D
+    # Collect all distinct b = qⱼ - qᵢ (i ≠ j)
+    all_bs = SVector{D, Float64}[]
+    for i in eachindex(kvGsv), j in eachindex(kvGsv)
+        i == j && continue
+        b = kvGsv[j] - kvGsv[i]
+        any(b′ -> isapprox(b, b′; atol), all_bs) || push!(all_bs, b)
+    end
+
+    # Group into orbits: g ∈ lg maps b → rotation(inv(g))' * b
+    assigned = falses(length(all_bs))
+    orbits = Tuple{SVector{D,Float64}, Vector{SVector{D,Float64}}}[]
+    for (i, b) in enumerate(all_bs)
+        assigned[i] && continue
+        orbit_bs = SVector{D, Float64}[b]
+        assigned[i] = true
+        for g in lg
+            W_inv  = rotation(inv(g))
+            b_img  = SVector{D, Float64}(W_inv' * b)
+            j = findfirst(b′ -> isapprox(b_img, b′; atol), all_bs)
+            j !== nothing && !assigned[j] || continue
+            push!(orbit_bs, all_bs[j])
+            assigned[j] = true
+        end
+        push!(orbits, (b, orbit_bs))
+    end
+    return orbits
 end

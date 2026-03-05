@@ -6,5 +6,6 @@ using Test
         include("perturbation_theory/test_p2.jl")
         include("perturbation_theory/test_p4_X.jl")
         include("perturbation_theory/test_p4_M.jl")
+        include("perturbation_theory/test_p6mm_Gamma.jl")
     end
 end

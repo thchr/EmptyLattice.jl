@@ -25,7 +25,7 @@ using EmptyLattice.PerturbationTheory
     D = 2
 
     Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
-    Gs = reciprocalbasis(Rs)
+    Gs = dualbasis(Rs)
 
     lgirsd = lgirreps(sgnum, Val(D))
     lgirs_X = lgirsd["X"]
@@ -64,27 +64,25 @@ using EmptyLattice.PerturbationTheory
     Δε₀ = 0.5
     Δε_fourier = Dict(b => Δε₀, -b => Δε₀)
 
-    Δωs_TM = [real(frequency_shift(c, orbit, Δε_fourier, ω_X)) for c in cs]
+    es_TM     = frequency_shifts(lgirs_X, orbit_idx; polarization=:TM, Gs)
+    result_TM = evaluate(es_TM, Δε_fourier)
 
+    Δωs_TM = collect(values(result_TM))
     @test Δωs_TM[1] ≈ -Δωs_TM[2]  atol=1e-10
     @test abs(Δωs_TM[1]) ≈ (ω_X / 2) * Δε₀  atol=1e-10
 
     # Check sign by label: X₁ shifts down, X₂ shifts up
-    for (i, lgir) in enumerate(lgirs_X)
-        lab = label(lgir)
-        if endswith(lab, "1") || endswith(lab, "₁")
-            @test Δωs_TM[i] < 0
-        elseif endswith(lab, "2") || endswith(lab, "₂")
-            @test Δωs_TM[i] > 0
-        end
-    end
+    hasnum(k, n) = endswith(k, string(n)) || endswith(k, string(Char(0x2080 + n)))
+    @test result_TM[only(k for k in keys(result_TM) if hasnum(k, 1))] < 0
+    @test result_TM[only(k for k in keys(result_TM) if hasnum(k, 2))] > 0
 
     # --- TE frequency shifts ---
     # q₂ = -q₁ at X-point ⟹ TE overlap ê_{q₂}†ê_{q₁} = q̂₂·q̂₁ = -1
-    # All geometric factors f_b flip sign relative to TM.
-    Δωs_TE = [real(frequency_shift(c, orbit, Δε_fourier, ω_X; Gs, polarization=:TE))
-              for c in cs]
+    # All geometric factors f_b flip sign relative to TM: TE shifts are negatives of TM.
+    es_TE     = frequency_shifts(lgirs_X, orbit_idx; polarization=:TE, Gs)
+    result_TE = evaluate(es_TE, Δε_fourier)
 
-    @test Δωs_TE[1] ≈ -Δωs_TM[1]  atol=1e-10
-    @test Δωs_TE[2] ≈ -Δωs_TM[2]  atol=1e-10
+    for lab in keys(result_TM)
+        @test result_TE[lab] ≈ -result_TM[lab]  atol=1e-10
+    end
 end

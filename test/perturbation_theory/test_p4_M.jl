@@ -26,7 +26,7 @@ using EmptyLattice.PerturbationTheory
     D = 2
 
     Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
-    Gs = reciprocalbasis(Rs)
+    Gs = dualbasis(Rs)
     Gm = stack(Gs)
 
     lgirsd = lgirreps(sgnum, Val(D))
@@ -81,35 +81,28 @@ using EmptyLattice.PerturbationTheory
     end
 
     # --- TM frequency shifts ---
-    Δωs_TM = [real(frequency_shift(c, orbit, Δε_fourier, ω_M)) for c in cs]
-    @test all(isreal(frequency_shift(c, orbit, Δε_fourier, ω_M)) for c in cs)
-
-    # Identify each irrep by numerical label suffix (handles plain or Unicode subscripts)
     hasnum(k, n) = endswith(k, string(n)) || endswith(k, string(Char(0x2080 + n)))
-    Δω_TM = Dict(n => only(Δωs_TM[i] for (i, ir) in enumerate(lgirs_M)
-                            if hasnum(label(ir), n))
-                 for n in 1:4)
-
     factor = ω_M / 2  # ε = 1
-    @test Δω_TM[1] ≈ -factor * ( 2Δε₁₀ + Δε₁₁)  atol=1e-10
-    @test Δω_TM[2] ≈ -factor * (-2Δε₁₀ + Δε₁₁)  atol=1e-10
-    @test Δω_TM[3] ≈  factor * Δε₁₁              atol=1e-10
-    @test Δω_TM[4] ≈  factor * Δε₁₁              atol=1e-10  # M₃ = M₄
+
+    es_TM   = frequency_shifts(lgirs_M, orbit_idx; polarization=:TM, Gs)
+    result_TM = evaluate(es_TM, Δε_fourier)
+
+    getΔω(r, n) = only(v for (k, v) in r if hasnum(k, n))
+    @test getΔω(result_TM, 1) ≈ -factor * ( 2Δε₁₀ + Δε₁₁)  atol=1e-10
+    @test getΔω(result_TM, 2) ≈ -factor * (-2Δε₁₀ + Δε₁₁)  atol=1e-10
+    @test getΔω(result_TM, 3) ≈  factor * Δε₁₁              atol=1e-10
+    @test getΔω(result_TM, 4) ≈  factor * Δε₁₁              atol=1e-10  # M₃ = M₄
 
     # --- TE frequency shifts ---
     # Adjacent TE overlaps = 0 (perpendicular orbit vectors), diagonal overlaps = -1.
     # Consequently Δε₁₀ drops out entirely and the Δε₁₁ contributions flip sign:
     #   Δω_TE_{M₁} = Δω_TE_{M₂} = +(ω_M/2ε) Δε₁₁
     #   Δω_TE_{M₃} = Δω_TE_{M₄} = -(ω_M/2ε) Δε₁₁
-    Δωs_TE = [real(frequency_shift(c, orbit, Δε_fourier, ω_M; Gs, polarization=:TE))
-              for c in cs]
+    es_TE   = frequency_shifts(lgirs_M, orbit_idx; polarization=:TE, Gs)
+    result_TE = evaluate(es_TE, Δε_fourier)
 
-    Δω_TE = Dict(n => only(Δωs_TE[i] for (i, ir) in enumerate(lgirs_M)
-                            if hasnum(label(ir), n))
-                 for n in 1:4)
-
-    @test Δω_TE[1] ≈  factor * Δε₁₁  atol=1e-10
-    @test Δω_TE[2] ≈  factor * Δε₁₁  atol=1e-10  # same as M₁: Δε₁₀ has no TE effect
-    @test Δω_TE[3] ≈ -factor * Δε₁₁  atol=1e-10
-    @test Δω_TE[4] ≈ -factor * Δε₁₁  atol=1e-10  # M₃ = M₄ for TE too
+    @test getΔω(result_TE, 1) ≈  factor * Δε₁₁  atol=1e-10
+    @test getΔω(result_TE, 2) ≈  factor * Δε₁₁  atol=1e-10  # same as M₁: Δε₁₀ has no TE effect
+    @test getΔω(result_TE, 3) ≈ -factor * Δε₁₁  atol=1e-10
+    @test getΔω(result_TE, 4) ≈ -factor * Δε₁₁  atol=1e-10  # M₃ = M₄ for TE too
 end

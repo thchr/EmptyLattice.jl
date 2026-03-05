@@ -81,119 +81,40 @@ All four source files implemented; tests passing for p2, p4-X, p4-M (TM).
 
 ---
 
-## Phase 2: TE Frequency Shifts, Test Cleanup, and Usage Examples
+## Phase 2: TE Frequency Shifts, Test Cleanup, and Usage Examples  ✓ COMPLETE
 
-### 2a: Fix TE Geometric Factor (`frequency_shifts.jl`)
+### Summary of completed work
 
-**Bug in Phase 1 plan**: The plan incorrectly stated that the TE polarization overlap
-`ê_{q+b}†ê_q` is 1 "by construction since both ê vectors rotate together with q."
-This is wrong. The TE polarization vector is defined independently per orbit point as
-`ê_q = (-q_y, q_x)/|q|` (CCW rotation of q̂). The overlap between two such vectors is:
+**2a: TE Geometric Factor** — `geometric_factor` now accepts `Gs` and `polarization`
+keyword arguments. For `:TE`, the overlap `ê_{q+b}†ê_q` is computed as the dot product
+of unit momentum vectors `q̂_{q+b}·q̂_q` (not trivially 1). For `:TM` the overlap is 1.
+The low-level helpers `geometric_factors` (Dict-returner) and `frequency_shift` (singular)
+were removed; all callers now use the high-level `frequency_shifts` + `evaluate` API.
 
-```
-ê_{q+b}†ê_q = q̂_{q+b} · q̂_q    (dot product of unit momentum vectors, NOT generally 1)
-```
+**2b: Test cleanup** — All test files updated:
+- Direct string-key access to `lgirsd["X"]`, `lgirsd["M"]`, etc.
+- No unnecessary `SVector` wrapping.
+- No tests of Crystalline internals.
+- Analytical checks against closed-form expressions from main.tex (p2 Y-point, p4 M-point).
+- TE variants added to p2 and p4-X tests.
+- New test file `test_p6mm_Gamma.jl`: regression test for `degeneracy_idx` selection logic
+  at the Γ-point of p6mm (sgnum=17), verifying that `degeneracy_idx=1` (ω=0) returns only
+  Γ₁ with 0 shift terms, and `degeneracy_idx=2` (ω=2/√3) returns the 4 present irreps
+  {Γ₁,Γ₄,Γ₅,Γ₆} each with 3 b-orbit shift terms.
 
-For example, at the p4 M-point the orbit contains vectors like (½,½) and (-½,½); the
-overlap between adjacent orbit points can be 0, ±1, or anything in between.
-
-**Fix**: `geometric_factor` and `frequency_shift` must accept `Gs::ReciprocalBasis` and
-`polarization::Union{Symbol,Nothing}` as additional arguments. For `:TE`, compute:
+**High-level API** — The public interface is now:
 ```julia
-Gm = stack(Gs)
-q_cart      = Gm * kvGsv[i]
-q_plus_b_cart = Gm * (kvGsv[i] .+ b)
-overlap = dot(q_plus_b_cart, q_cart) / (norm(q_plus_b_cart) * norm(q_cart))
+es = frequency_shifts(lgirs, degeneracy_idx; polarization, Gs)
+# → Collection{IrrepShiftExpr{D}}
+Δωs = evaluate(es, Δε_fourier; ε)
+# → Dict{String, Float64}
 ```
-For `:TM` (or `nothing`), the overlap is trivially 1 (no change to current behavior).
+`degeneracy_idx` selects a particular degenerate band cluster from `unique_spectrum`,
+and `frequency_shifts` automatically determines which irreps have multiplicity 1 in
+that cluster and returns only those.
 
-The updated signatures:
-```julia
-geometric_factor(c, kvGsv, b, Gs; polarization=:TM, atol=1e-10)
-geometric_factors(c, kvGsv, Gs; polarization=:TM, atol=1e-10)
-frequency_shift(c, kvGsv, Δε_fourier, ω, ε=1.0, Gs; polarization=:TM, atol=1e-10)
-```
-
-To keep backward compatibility for TM callers, `Gs` can be made optional (defaulting to
-`nothing`) with a check that it is supplied when `polarization === :TE`.
-
-### 2b: Test Cleanup
-
-The existing test files contain several issues to fix:
-
-1. **Overly complex k-point lookup**: replace key-search patterns like
-   ```julia
-   kkeys = collect(keys(lgirsd))
-   klab_idx = findfirst(kl -> ..., kkeys)
-   lgirs = lgirsd[kkeys[klab_idx]]
-   ```
-   with direct string-key access:
-   ```julia
-   lgirs = lgirsd["X"]   # or "Y", "M", etc.
-   ```
-
-2. **Unnecessary SVector wrapping**: `lgirreps` k-positions already return `SVector`s:
-   ```julia
-   # Before (unnecessarily verbose):
-   kv = SVector{2,Float64}(position(lgirs[1])())
-   # After:
-   kv = position(lgirs[1])()
-   ```
-
-3. **Remove tests of Crystalline internals**: tests like `@test length(lg) == 2` or
-   `@test all(det(rotation(g)) ≈ 1 for g in lg)` are testing Crystalline's data, not our
-   implementation. Remove them; keep only tests of `gamma_matrix`, `symmetry_adapted_coefficients`,
-   `geometric_factor`, and `frequency_shift` outputs.
-
-4. **Tighten analytical checks in test_p4_M.jl**: the current checks are too weak
-   (they only verify M₃ = M₄ and don't check the actual numerical values). Replace with
-   explicit checks against the analytical expressions from the note:
-   ```
-   Δω_{M₁} = -(ω_M/2ε)(2Δε₁₀ + Δε₁₁)
-   Δω_{M₂} = -(ω_M/2ε)(-2Δε₁₀ + Δε₁₁)
-   Δω_{M₃} = Δω_{M₄} = -(ω_M/2ε)(-Δε₁₁)
-   ```
-   This requires identifying which computed shift belongs to which irrep by label.
-
-5. **Add TE tests and verify ξ consistency**: once 2a is done, add TE variants to each test:
-   - Check that Γ matrices for TE equal TM matrices multiplied by ξ(g) = det(W) for each g
-     (for p2/p4 with only proper rotations, det(W) = 1, so TE and TM Γ matrices coincide)
-   - Check that symmetry-adapted coefficients c^(α) are identical for TM and TE in these cases
-   - Check that frequency shifts for TE differ from TM by the orbit-geometry factor q̂_{q+b}·q̂_q
-     (which for groups with only proper rotations may also be trivial — verify numerically)
-
-### 2c: Usage Examples
-
-Add a `docs/examples/` folder with a Julia script (or Pluto/Jupyter notebook) demonstrating
-how to use `PerturbationTheory` to reproduce analytical results from the note, specifically:
-
-- **p2 example**: compute geometric factors and frequency shifts at the Y-point; show they
-  reproduce `Δω = ∓(ω/2ε) Δε_G₁` for the A and B irreps.
-- **p4 example**: reproduce the M-point table of frequency shifts in terms of Δε₁₀ and Δε₁₁.
-- Show the general usage pattern:
-  ```julia
-  using EmptyLattice, EmptyLattice.PerturbationTheory, Crystalline, StaticArrays
-
-  sgnum = 10; D = 2
-  Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
-  Gs = reciprocalbasis(Rs)
-  lgirsd = lgirreps(sgnum, Val(D))
-  lgirs = lgirsd["M"]
-  kv = position(lgirs[1])()
-
-  _, kvGsv = unique_spectrum(kv, Gs)
-  orbit = kvGsv[findfirst(o -> length(o) == 4, kvGsv)]
-
-  lg = group(lgirs[1])
-  Γs = gamma_matrices(orbit, lg; polarization=:TM)
-
-  for lgir in lgirs
-      cs = symmetry_adapted_coefficients(lgir, Γs)
-      c  = cs[:, 1]
-      fs = geometric_factors(c, orbit, Gs; polarization=:TM)
-      println(label(lgir), ": ", fs)
-  end
-  ```
+**2c: Usage examples** — `docs/examples/perturbation_theory_demo.jl` demonstrates the
+full workflow for p2 (Y-point) and p4 (M-point) with both TM and TE polarizations.
 
 ---
 

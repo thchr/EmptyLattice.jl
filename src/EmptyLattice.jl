@@ -394,5 +394,11 @@ function Crystalline.collect_irrep_annotations(
     return annotationsd
 end
 
+# ---------------------------------------------------------------------------------------- #
+# PerturbationTheory submodule (included last so unique_spectrum is already defined above)
+
+include("PerturbationTheory/PerturbationTheory.jl")
+
+# ---------------------------------------------------------------------------------------- #
 
 end # module

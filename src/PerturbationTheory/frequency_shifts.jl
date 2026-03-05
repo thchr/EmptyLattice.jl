@@ -23,6 +23,7 @@ function _te_overlap(q_cart, q_plus_b_cart)
     return dot(q_plus_b_cart, q_cart) / (norm(q_plus_b_cart) * norm(q_cart))
 end
 
+
 """
     geometric_factor(c, kvGsv, b; Gs=nothing, polarization=:TM, atol=1e-10) -> ComplexF64
 
@@ -59,129 +60,128 @@ function geometric_factor(
         q_plus_b = kvGsv[i] .+ b
         j = find_orbit_index(q_plus_b, kvGsv; atol)
         j === nothing && continue
-        overlap = polarization === :TE ?
-            _te_overlap(Gm * kvGsv[i], Gm * q_plus_b) :
+        polarization_overlap = if polarization === :TE
+            _te_overlap(Gm * kvGsv[i], Gm * q_plus_b)
+        else
             one(Float64)
-        f += overlap * conj(c[j]) * c[i]
+        end
+        f += polarization_overlap * conj(c[j]) * c[i]
     end
     return f
 end
 
 """
-    geometric_factors(c, kvGsv; Gs=nothing, polarization=:TM, atol=1e-10)
-        -> Dict{<:StaticVector, ComplexF64}
+    frequency_shifts(
+        lgirs,
+        [degeneracy_idx=1];
+        polarization=nothing,
+        Gs=nothing,
+        atol=1e-10
+    ) -> Collection{IrrepShiftExpr{D}}
 
-Compute geometric factors f_b for all reciprocal-lattice vectors b = q_j - q_i
-connecting pairs of orbit points in `kvGsv`.
+High-level interface: compute symbolic first-order frequency-shift expressions for the
+irreps in `lgirs` that are featured at the `degeneracy_idx`-th unique frequency of the
+empty-lattice spectrum at the k-point encoded in `lgirs`.
 
-Returns a `Dict` mapping each connecting b-vector (in fractional reciprocal coordinates)
-to its geometric factor f_b. The b = 0 (self) term is also included.
+The featured irreps are determined via `planewave_symeigs` + `find_representation`:
+only irreps with multiplicity 1 in the symmetry eigenvalue decomposition are included.
+Irreps with multiplicity 0 are absent at this degeneracy and omitted from the result.
+Multiplicity > 1 triggers an error (degenerate perturbation theory is not yet implemented).
 
-# Arguments
-- `c`: coefficient vector (column of `symmetry_adapted_coefficients` output)
-- `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
-- `Gs`: reciprocal basis (required for `:TE`; may be `nothing` for `:TM`)
-- `polarization`: `:TM` (default) or `:TE`
-- `atol`: tolerance for orbit matching
-"""
-function geometric_factors(
-    c::AbstractVector{<:Number},
-    kvGsv::AbstractVector{<:StaticVector{D}};
-    Gs = nothing,
-    polarization::Union{Symbol, Nothing} = :TM,
-    atol::Real = 1e-10,
-) where D
-    polarization === :TE && Gs === nothing &&
-        error("Gs must be supplied when polarization === :TE")
-    Gm = polarization === :TE ? stack(Gs) : nothing
-    D2F = Dict{SVector{D, Float64}, ComplexF64}()
-    for i in eachindex(kvGsv), j in eachindex(kvGsv)
-        b  = SVector{D, Float64}(kvGsv[j] .- kvGsv[i])
-        overlap = polarization === :TE ?
-            _te_overlap(Gm * kvGsv[i], Gm * kvGsv[j]) :
-            one(Float64)
-        fb = overlap * conj(c[j]) * c[i]
-        D2F[b] = get(D2F, b, zero(ComplexF64)) + fb
-    end
-    return D2F
-end
+Internally:
+1. Calls `unique_spectrum` and `planewave_symeigs` to find the orbit and symmetry
+   eigenvalues at the `degeneracy_idx`-th unique frequency.
+2. Decomposes the eigenvalues into irrep multiplicities via `find_representation`.
+3. Builds Γ representation matrices and symmetry-adapted coefficients.
+4. Finds symmetry orbits of connecting b-vectors via `b_vector_orbits`.
+5. For each present irrep, computes the orbit-summed geometric factor
+   `A_{α,[b]} = Σ_{b' ∈ orbit} f_{b'}` for each b-orbit.
 
-"""
-    frequency_shift(c, kvGsv, Δε_fourier, ω, ε=1.0; Gs=nothing, polarization=:TM, atol=1e-10)
-        -> ComplexF64
-
-Compute the first-order frequency shift Δω for a scalar permittivity perturbation:
-
-```
-Δω = -(ω / 2ε) Σ_{b} Δε_b · f_b
-```
-
-# Arguments
-- `c`: coefficient vector (column of `symmetry_adapted_coefficients` output)
-- `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
-- `Δε_fourier`: `Dict{<:AbstractVector, <:Number}` mapping b-vectors (fractional
-  reciprocal coordinates) to Fourier components Δε_b
-- `ω`: unperturbed frequency
-- `ε`: background permittivity (default 1.0)
-- `Gs`: reciprocal basis (required for `:TE`; may be `nothing` for `:TM`)
-- `polarization`: `:TM` (default) or `:TE`
-- `atol`: tolerance for orbit matching in `geometric_factor`
-"""
-function frequency_shift(
-    c::AbstractVector{<:Number},
-    kvGsv::AbstractVector{<:StaticVector},
-    Δε_fourier::Dict,
-    ω::Real,
-    ε::Real = 1.0;
-    Gs = nothing,
-    polarization::Union{Symbol, Nothing} = :TM,
-    atol::Real = 1e-10,
-)
-    Δω = zero(ComplexF64)
-    for (b, Δε_b) in Δε_fourier
-        f = geometric_factor(c, kvGsv, b; Gs, polarization, atol)
-        Δω += Δε_b * f
-    end
-    return -(ω / (2ε)) * Δω
-end
-
-"""
-    frequency_shifts(lgirs, orbit, Δε_fourier, ω, ε=1.0; Gs=nothing, polarization=:TM, atol=1e-10)
-        -> FrequencyShifts
-
-High-level interface: compute the first-order frequency shift for each irrep in `lgirs`
-and return the results as a `FrequencyShifts` collection with a table-style display.
-
-Internally builds Γ representation matrices and symmetry-adapted coefficients, then calls
-`frequency_shift` for each irrep.  For multi-dimensional irreps the first partner function
-is used (all partners give equal shifts for scalar perturbations, by Schur's lemma).
+Returns a `Collection{IrrepShiftExpr{D}}` over the featured irreps, storing the symbolic
+expressions and the unperturbed frequency `ω`. Call [`evaluate`](@ref) on the result to
+obtain numerical shifts.
 
 # Arguments
 - `lgirs`: irreps at the k-point, e.g. `lgirreps(sgnum, Val(D))["M"]`
-- `orbit`: q-vectors in fractional reciprocal coordinates (from `unique_spectrum`)
-- `Δε_fourier`: Fourier components of Δε, keyed by b-vectors in fractional reciprocal coords
-- `ω`: unperturbed frequency of the orbit
-- `ε`: background permittivity (default 1.0)
-- `Gs`: reciprocal basis (required for `:TE`; may be `nothing` for `:TM`)
-- `polarization`: `:TM` (default) or `:TE`
+- `degeneracy_idx`: index into the unique-frequency list (default 1 = lowest frequency)
+- `polarization`: `:TM`, `:TE`, or `nothing` (3D); required for D = 2
+- `Gs`: reciprocal basis; required for D = 2 (both polarizations) and D = 3
 - `atol`: tolerance for orbit matching
+
+# Example
+```julia
+lgirs = lgirreps(10, Val(2))["M"]   # p4, M-point
+Gs    = dualbasis(primitivize(directbasis(10, Val(2)), centering(10, 2)))
+fse   = frequency_shifts(lgirs; polarization=:TM, Gs)
+display(fse)
+evaluate(fse, Dict(SVector(1.0,0.0) => 0.3, SVector(1.0,1.0) => 0.2))
+```
 """
 function frequency_shifts(
     lgirs::AbstractVector,
-    orbit::AbstractVector{<:StaticVector},
-    Δε_fourier::Dict,
-    ω::Real,
-    ε::Real = 1.0;
-    polarization::Union{Symbol, Nothing} = :TM,
+    degeneracy_idx::Int = 1;
+    polarization::Union{Symbol, Nothing} = nothing,
     Gs = nothing,
     atol::Real = 1e-10,
 )
+    Gs === nothing && error("`Gs` must be supplied (reciprocal basis for the lattice)")
+
     lg = group(lgirs[1])
-    Γs = gamma_matrices(orbit, lg; polarization, atol)
-    data = map(lgirs) do lgir
-        cs = symmetry_adapted_coefficients(lgir, Γs; seed_idx=1)
-        Δω = frequency_shift(cs[:, 1], orbit, Δε_fourier, ω, ε; Gs, polarization, atol)
-        FrequencyShift(label(lgir), Δω)
+    kv = position(lg)()
+    D  = length(kv)
+    if D == 2 && polarization === nothing
+        error("for D = 2, `polarization` must be specified as `:TM` or `:TE`")
     end
-    return FrequencyShifts(data, polarization)
+
+    # Unique frequencies + orbits, and symmetry eigenvalues at each frequency
+    Nfreq = degeneracy_idx
+    ωs, kvGsv = unique_spectrum(kv, Gs; Nfreq)
+    symeigs   = planewave_symeigs(lg, Gs, polarization; Nfreq)
+
+    # Decompose symmetry eigenvalues at the chosen frequency into irrep multiplicities
+    irmults = find_representation(symeigs[degeneracy_idx], lgirs)
+    irmults === nothing && error(
+        "the symmetry eigenvalue at degeneracy_idx=$degeneracy_idx does not decompose " *
+        "into the given irreps; check that `lgirs` is the correct irrep set for this k-point"
+    )
+    any(m -> m > 1, irmults) && error(
+        "multiplicity > 1 found at degeneracy_idx=$degeneracy_idx: degenerate " *
+        "perturbation theory is required (not yet implemented)"
+    )
+
+    ω     = ωs[degeneracy_idx]
+    orbit = kvGsv[degeneracy_idx]
+
+    # Γ matrices and symmetry-adapted coefficients
+    Γs = gamma_matrices(orbit, lg; polarization, atol)
+
+    # Find symmetry orbits of b-vectors connecting orbit points
+    b_orbits = b_vector_orbits(orbit, lg; atol)
+
+    function _make_terms(c)
+        terms = ShiftTerm{D}[]
+        for (canonical_b, orbit_bs) in b_orbits
+            # Sum geometric factors over the orbit; coefficient is real for physical
+            # (Hermitian) Δε since G_k pairs each b with a conjugate b' s.t. f_{b'}=f_b*.
+            A = sum(b′ -> geometric_factor(c, orbit, b′; Gs, polarization, atol), orbit_bs)
+            abs(real(A)) > atol || continue  # skip symmetry-forbidden (zero) contributions
+            push!(terms, ShiftTerm{D}(ReciprocalPoint{D}(canonical_b),
+                                      ReciprocalPoint{D}.(orbit_bs),
+                                      real(A)))
+        end
+        return terms
+    end
+
+    # Only include irreps that are present (multiplicity == 1) at this degeneracy
+    data = Vector{IrrepShiftExpr{D}}(undef, sum(irmults))
+    idx = 1
+    for (k, lgir) in enumerate(lgirs)
+        irmults[k] == 0 && continue
+        cs = symmetry_adapted_coefficients(lgir, Γs; seed_idx=1)
+        c = @view cs[:, 1]   # first partner function (all partners give equal shifts)
+        data[idx] = IrrepShiftExpr{D}(lgir, ω, polarization, _make_terms(c))
+        idx += 1
+    end
+
+    return Collection(data)
 end

@@ -6,15 +6,20 @@ module PerturbationTheory
 # For a given k-point, reciprocal basis, and space/plane group, this module computes:
 # - Γ representation matrices Γ_{q'τ', qτ}(g) for each symmetry operation g
 # - Symmetry-adapted coefficient vectors c_{q,n}^{(α)} (via projection operators)
-# - First-order frequency shifts Δω for lattice-periodic perturbations Δε(r)
+# - Symbolic first-order frequency-shift expressions as Collection{IrrepShiftExpr}
+# - Numerical shifts via evaluate(es, Δε_fourier)  (es = Collection{IrrepShiftExpr})
 # ---------------------------------------------------------------------------------------- #
 
 using StaticArrays, Crystalline, LinearAlgebra
+import ..unique_spectrum        # defined in parent EmptyLattice module
+import ..planewave_symeigs      # defined in parent EmptyLattice module
+import Bravais: ReciprocalPoint # concrete reciprocal-space point type
 
-export gamma_matrix, gamma_matrices
+export gamma_matrix, gamma_matrices, b_vector_orbits
 export symmetry_adapted_coefficients
-export geometric_factor, geometric_factors, frequency_shift, frequency_shifts
-export FrequencyShift, FrequencyShifts
+export geometric_factor, frequency_shifts
+export ShiftTerm, IrrepShiftExpr
+export evaluate
 
 # ---------------------------------------------------------------------------------------- #
 
