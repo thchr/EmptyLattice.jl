@@ -3,13 +3,15 @@
 # The Γ representation encodes the action of symmetry operations on the space of
 # empty-lattice plane-wave states at a given k-point.  For g = (W|w) ∈ G_k (little group):
 #
-#   Γ_{q'τ', qτ}(g)  =  δ_{q', (W⁻¹)ᵀ q}  ·  exp(-2πi q · W⁻¹w)  ·  ê_{q'τ'}† (R_cart ê_{qτ})
+#   Γ_{q'τ', qτ}(g)  =  δ_{q', (W⁻¹)ᵀ q}  ·  exp(-2πi q · W⁻¹w)  ·  ê_{q'τ'}† (W_cart ê_{qτ})
 #
 # Here q, q' are orbit vectors in **fractional reciprocal coordinates** (basis of Gs).
+# W_cart = Rm W Rm⁻¹ is the Cartesian rotation (Rm = stack(Rs), Rs = dualbasis(Gs)).
 # The phase factor exp(-2πi q · W⁻¹w) = cispi(2 * dot(q, translation(inv(g)))), matching
 # the convention in EmptyLattice.planewave_symeig.
-# The polarization overlap ê†(Rê) is 1 for :TM (all in-plane R leave ẑ fixed) and det(W)
-# for :TE (in-plane R rotate ê together with q, picking up det(R) = det(W) for reflections).
+# 2D: the polarization overlap ê†(W_cart ê) is a scalar — 1 for :TM and det(W) for :TE.
+# 3D: the polarization overlap is a 2×2 matrix P_{τ'τ} = evs[j][:,τ']⋅(W_cart evs[i][:,τ]),
+#     computed explicitly using Cartesian polarization frames from _3d_polarization_vectors.
 #
 # Reference: main.tex, eq. (gamma).
 
@@ -28,24 +30,17 @@ function find_orbit_index(q, kvGsv; atol::Real = 1e-10)
     return nothing
 end
 
-# Polarization overlap ê_{q'}†(R ê_q) for symmetry operation g with rotation matrix W.
+# Polarization overlap ê_{q'}†(R ê_q) for 2D symmetry operation g with rotation matrix W.
 # For :TM: R leaves ẑ fixed, overlap = 1.
 # For :TE: R rotates ê_q to ± ê_{Rq}; the sign is det(R) = det(W) (basis-independent).
-# For 3D: not yet implemented.
-function _polarization_overlap(W, ::Nothing)
-    # TM: trivial
-    return one(ComplexF64)
-end
+#   Under a proper rotation (det W = +1), R maps (q̂, ê_q) together: Rê_q = ê_{Rq}.
+#   Under an improper rotation (det W = -1, e.g. a reflection), handedness is reversed:
+#   Rê_q = -ê_{Rq}.  In both cases overlap = det(W).
+# For 3D: not used; the 3D gamma_matrix builds the full 2×2 overlap matrix explicitly.
 function _polarization_overlap(W, polarization::Symbol)
     if polarization === :TM
         return one(ComplexF64)
     elseif polarization === :TE
-        # For TE, ê_q is the in-plane CCW-perpendicular to q.  Under a proper rotation R
-        # (det R = +1), R maps (q, ê_q) together so that Rê_q = ê_{Rq}: overlap = +1.
-        # Under an improper rotation R (det R = -1, e.g. a reflection), handedness is
-        # reversed so Rê_q = -ê_{Rq}: overlap = -1.  In both cases overlap = det(R) = det(W).
-        # For groups with only proper rotations (p2, p4, …), det(W) = 1 for all operations
-        # and the overlap is trivially unity, consistent with the note's claim "again unity".
         return ComplexF64(det(W))
     else
         error("unknown polarization symbol: $polarization")
@@ -70,18 +65,18 @@ it is nonzero only when g maps the orbit point `kvGsv[i]` to (approximately) `kv
 where `pol_factor` = 1 for `:TM`, `det(W)` for `:TE`.
 
 # Arguments
-- `g::SymOperation{D}`: symmetry operation (rotation `W`, translation `w`; fractional direct)
+- `g::SymOperation{2}`: symmetry operation (rotation `W`, translation `w`; fractional direct)
 - `kvGsv`: orbit of q-vectors in fractional reciprocal coordinates
-- `polarization`: `:TM`, `:TE`, or `nothing` (3D; Phase 2 only)
+- `polarization`: `:TM` or `:TE`
 - `atol`: absolute tolerance for orbit-point matching
 """
 function gamma_matrix(
-    g::SymOperation{D},
-    kvGsv::AbstractVector{<:StaticVector{D}};
-    polarization::Union{Symbol, Nothing} = :TM,
+    g::SymOperation{2},
+    kvGsv::AbstractVector{<:StaticVector{2}};
+    polarization::Symbol = :TM,
     atol::Real = 1e-10,
-) where D
-    Γ = zeros(ComplexF64, length(kvGsv), length(kvGsv)) # TODO: generalize to D == 3?
+)
+    Γ = zeros(ComplexF64, length(kvGsv), length(kvGsv))
 
     g_inv   = inv(g)
     W_inv   = rotation(g_inv)    # W⁻¹ in fractional direct coords
@@ -104,7 +99,80 @@ function gamma_matrix(
 end
 
 """
-    gamma_matrices(kvGsv, lg; polarization=:TM, atol=1e-10) -> Vector{Matrix{ComplexF64}}
+    gamma_matrix(g, kvGsv, Gs; evs=nothing, atol=1e-10) -> Matrix{ComplexF64}
+
+Construct the `(2N)×(2N)` Γ representation matrix for a 3D symmetry operation `g` acting
+on the orbit `kvGsv` with transverse polarization frames `evs`.
+
+`N = length(kvGsv)`.  Index layout: μ(i,τ) = (i-1)·2 + τ (orbit point i, polarization τ).
+For each orbit pair (i→j) determined by g, the 2×2 block is:
+
+```
+Γ[2j-1:2j, 2i-1:2i](g) = phase · P(g; qᵢ→qⱼ)
+P_{τ'τ} = evs[j][:,τ'] ⋅ (W_cart · evs[i][:,τ])
+W_cart   = Rm · W · Rm⁻¹   (Cartesian rotation; Rm = stack(Rs), Rs = dualbasis(Gs))
+phase    = cispi(2 · dot(qᵢ, translation(inv(g))))
+```
+
+`W_cart` is computed via `cartesianize(g, Rs)` from Crystalline, which performs
+`opᶜ = Rm · opˡ · Rm⁻¹`.  This is equivalent to `inv(Gm') * W * Gm'` since
+`Rm = inv(Gm')` follows from the dual-basis relation `stack(Gs) = inv(stack(Rs)')`.
+
+Precomputed `evs` (from `_3d_polarization_vectors`) can be supplied as a keyword to
+avoid recomputation when called repeatedly (as in `gamma_matrices`).
+
+# Arguments
+- `g::SymOperation{3}`: symmetry operation (fractional direct coordinates)
+- `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
+- `Gs::ReciprocalBasis{3}`: reciprocal basis
+- `evs`: precomputed transverse frames (optional; computed from `Gs` if `nothing`)
+- `atol`: tolerance for orbit-point matching
+"""
+function gamma_matrix(
+    g::SymOperation{3},
+    kvGsv::AbstractVector{<:StaticVector{3}},
+    Gs::ReciprocalBasis{3};
+    evs::Union{Nothing, AbstractVector{<:SMatrix{3,2}}} = nothing,
+    atol::Real = 1e-10,
+)
+    evs_actual = isnothing(evs) ? _3d_polarization_vectors(kvGsv, Gs) : evs
+    Rs = dualbasis(Gs)
+    return _gamma_matrix_3d(g, kvGsv, evs_actual, Rs; atol)
+end
+
+# Inner implementation: takes pre-computed evs and Rs to avoid repeated allocation
+# in gamma_matrices (which precomputes both once for the whole little group loop).
+function _gamma_matrix_3d(
+    g::SymOperation{3},
+    kvGsv::AbstractVector{<:StaticVector{3}},
+    evs::AbstractVector{<:SMatrix{3,2}},
+    Rs::DirectBasis{3};
+    atol::Real = 1e-10,
+)
+    N = length(kvGsv)
+    Γ = zeros(ComplexF64, 2N, 2N)
+
+    g_inv  = inv(g)
+    W_inv  = rotation(g_inv)
+    w_inv  = translation(g_inv)
+    W_cart = rotation(cartesianize(g, Rs))  # = Rm * rotation(op) * Rm⁻¹, Rm = stack(Rs)
+                                            # (needs to be in Cartesian coords. since `evs`
+                                            # are also in Cartesian coords.)
+    for (i, qᵢ) in enumerate(kvGsv)
+        q′ = W_inv' * qᵢ
+        j = find_orbit_index(q′, kvGsv; atol)
+        j === nothing && continue
+        phase = cispi(2 * dot(qᵢ, w_inv))
+        # 2×2 polarization overlap: P_{τ'τ} = evs[j][:,τ'] ⋅ (W_cart · evs[i][:,τ])
+        P = evs[j]' * (W_cart * evs[i]) # 2×2 (all variables here in Cartesian coords.)
+        Γ[2j-1:2j, 2i-1:2i] .= phase .* P
+    end
+    return Γ
+end
+
+"""
+    gamma_matrices(kvGsv, lg; polarization=:TM, Gs=nothing, atol=1e-10)
+        -> Vector{Matrix{ComplexF64}}
 
 Construct the Γ representation matrix for each operation in the little group `lg`,
 acting on the orbit `kvGsv` (q-vectors in **fractional reciprocal coordinates**).
@@ -113,18 +181,31 @@ Returns a `Vector{Matrix{ComplexF64}}` of length `length(lg)`, in the **same ope
 order** as `operations(lg)`.  When `lg = group(lgir)` for some `LGIrrep`, this ordering
 is consistent with the irrep matrices returned by `matrices(lgir)` / `lgir()`.
 
+For D=2: `Gs` is not used; pass `polarization=:TM` or `:TE`.
+For D=3: `Gs` is required; `polarization` is ignored (must be `nothing` or omitted).
+
 # Arguments
 - `kvGsv`: orbit q-vectors in fractional reciprocal coordinates (e.g. from `unique_spectrum`)
 - `lg::LittleGroup{D}`: little group of the k-point
-- `polarization`: `:TM`, `:TE`, or `nothing` (3D)
+- `polarization`: `:TM`, `:TE` (2D only), or `nothing` (3D)
+- `Gs`: reciprocal basis (required for D=3)
 - `atol`: absolute tolerance for orbit-point matching
 """
 function gamma_matrices(
     kvGsv::AbstractVector{<:StaticVector{D}},
     lg::LittleGroup{D};
-    kwargs...
+    polarization::Union{Symbol,Nothing} = (D == 2 ? :TM : nothing),
+    Gs = nothing,
+    atol::Real = 1e-10,
 ) where D
-    return [gamma_matrix(g, kvGsv; kwargs...) for g in lg]
+    if D == 3
+        Gs === nothing && error("`Gs` must be supplied for D=3 `gamma_matrices`")
+        Rs = dualbasis(Gs)
+        evs = _3d_polarization_vectors(kvGsv, Gs)
+        return [_gamma_matrix_3d(g, kvGsv, evs, Rs; atol) for g in lg]
+    else
+        return [gamma_matrix(g, kvGsv; polarization, atol) for g in lg]
+    end
 end
 
 """

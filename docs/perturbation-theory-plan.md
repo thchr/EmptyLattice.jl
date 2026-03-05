@@ -118,7 +118,98 @@ full workflow for p2 (Y-point) and p4 (M-point) with both TM and TE polarization
 
 ---
 
-## Phase 3: Multiple-Copy Irrep Degeneracy (future)
+## Phase 3: 3D Transverse Polarization (single-copy irrep case)
+
+Extend the framework to D=3 for the case where every irrep appearing at the chosen
+degeneracy has multiplicity exactly 1 (i.e. the `irmults[k] > 1` error is never hit).
+This covers many physically important cases — e.g. a k-point with enough symmetry that
+the 2|orbit|-dimensional space decomposes into distinct 1D or multi-dimensional (but
+single-copy) irreps.  The key new ingredient is the **τ (polarization) index**: in 3D
+there are 2 transverse modes per q-vector, so the state space is 2|orbit|-dimensional.
+
+### Implementation divergence philosophy
+
+The 2D implementation (scalar polarization overlaps, N×N Γ matrices, length-N coefficient
+vectors) is kept entirely unchanged.  The 3D path diverges at the level of `gamma_matrix`
+(separate method dispatched on `SymOperation{3}`) and `geometric_factor` (a private 3D
+helper).  The public API (`gamma_matrices`, `frequency_shifts`, `evaluate`) stays unified.
+
+### 3a: 3D polarization basis (`polarizations.jl`)
+
+Implement `_3d_polarization_vectors(kvGsv, Gs)` returning a
+`Vector{SMatrix{3,2,Float64,6}}` — for each orbit point qᵢ, two orthonormal unit
+columns ê₁(qᵢ), ê₂(qᵢ) forming a right-handed transverse frame:
+
+```
+ê₁(q̂) = normalize(ê_ref × q̂),   ê_ref = ẑ (or x̂ if q ∥ ẑ)
+ê₂(q̂) = q̂ × ê₁(q̂)
+```
+
+Remove the `error("3D polarization basis not yet implemented")` and dispatch to this.
+Update `polarization_vectors` to return `Vector{SMatrix{3,2}}` for D=3.
+
+### 3b: 3D Γ matrix (`gamma_rep.jl`)
+
+Add a new method `gamma_matrix(g::SymOperation{3}, kvGsv, evs, Gm; atol)` building a
+`(2N)×(2N)` matrix (N = orbit size).  Index layout: μ(i,τ) = (i-1)·2 + τ, so the 2×2
+polarization block for orbit pair (i→j) lives at rows `2j-1:2j`, cols `2i-1:2i`.
+
+```
+Γ[2j-1:2j, 2i-1:2i](g) = phase · P(g; qᵢ→qⱼ)
+
+P_{τ'τ}(g) = evs[j][:,τ'] ⋅ (R_cart · evs[i][:,τ])   (2×2 overlap matrix)
+R_cart = inv(Gm') * W * Gm'
+phase  = cispi(2 · dot(qᵢ, translation(inv(g))))
+```
+
+`Gm = stack(Gs)` (reciprocal matrix).  `R_cart` is orthogonal, so this is just a matrix
+multiplication.  The Kronecker-delta orbit-matching logic is identical to 2D.
+
+Update `gamma_matrices` to accept `Gs` as a keyword argument.  For D=3 compute `evs` and
+`Gm` internally; for D=2 ignore `Gs` (backward-compatible).
+
+### 3c: 3D geometric factor (`frequency_shifts.jl`)
+
+Add a private `_geometric_factor_3d(c, kvGsv, b, evs; atol)`.  With `c` indexed by
+μ(i,τ) = (i-1)·2+τ and `evs[i]` the 3×2 transverse frame at qᵢ:
+
+```
+f_b = Σᵢ [q_i+b ∈ orbit at index j]  cⱼ†  (evs[j]' * evs[i])  cᵢ
+```
+
+where `cᵢ = [c[μ(i,1)], c[μ(i,2)]]` is the 2-vector of polarization amplitudes at
+orbit point i, and `evs[j]' * evs[i]` is the 2×2 dot-product overlap matrix (no
+rotation needed here — this is a direct amplitude overlap, not a symmetry action).
+
+Dispatch in `geometric_factor`: when the orbit is 3D and `Gs` is provided, compute `evs`
+and call `_geometric_factor_3d`.
+
+### 3d: Wire-up (`frequency_shifts.jl`)
+
+- Pass `Gs` through to `gamma_matrices`.
+- Remove the `D == 3` error gate; keep the `D == 2 && polarization === nothing` check.
+- `planewave_symeigs` already returns the correct combined character for 3D (it sums
+  `2cos(2π/|n|)` per orbit point, counting both transverse modes), so `find_representation`
+  and the `irmults > 1` guard work without change.
+
+### 3e: Test (`test/perturbation_theory/test_p4m3m_X.jl`)
+
+Plane group → space group: use **Pm-3m (sgnum=221, D=3)** at the **X-point** `k=[½,0,0]`.
+
+**Why this works**: X is symmorphic (no glide/screw phases), the little group is D₄ₕ
+(order 16), and at the first non-trivial frequency the 2|orbit|-dimensional space
+decomposes into distinct single-copy irreps (verified by `find_representation`).
+
+Test content:
+- `gamma_matrices` returns `(2N)×(2N)` unitary matrices for each g ∈ little group
+- `Γ(E) = I_{2N}`
+- `symmetry_adapted_coefficients` produces orthonormal columns of length `2N`
+- `frequency_shifts` runs without error and returns a `Collection{IrrepShiftExpr{3}}`
+- `evaluate` gives the expected pattern of shifts (regression, or analytical if tractable)
+
+---
+
+## Phase 4: Multiple-Copy Irrep Degeneracy (future)
 
 When an orbit supports multiple copies of the same irrep (e.g., the P̄1 example from the
 note, where both even and odd subspaces carry each irrep twice due to the two transverse
@@ -131,9 +222,9 @@ be diagonalized.
   degeneracy, including Gram-Schmidt orthogonalization of the projected states)
 - Only then implement the diagonalization within the degenerate subspace
 
-This phase also includes 3D polarization basis construction and `test_Pbar1.jl`.
+This phase includes `test_Pbar1.jl` (space group P̄1, 3D).
 
-## Phase 4: Tensor Perturbations (future)
+## Phase 5: Tensor Perturbations (future)
 
 Perturbations of the form Δμ (off-diagonal permeability, TR-breaking) and tensorial Δε
 (gyrotropic form). These modify the perturbation matrix element to include cross-product

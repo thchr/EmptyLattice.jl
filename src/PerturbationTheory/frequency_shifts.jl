@@ -23,49 +23,94 @@ function _te_overlap(q_cart, q_plus_b_cart)
     return dot(q_plus_b_cart, q_cart) / (norm(q_plus_b_cart) * norm(q_cart))
 end
 
-
 """
     geometric_factor(c, kvGsv, b; Gs=nothing, polarization=:TM, atol=1e-10) -> ComplexF64
 
 Compute the geometric factor f_b for a reciprocal-lattice displacement vector `b`
 (in **fractional reciprocal coordinates**, same basis as `kvGsv`).
 
+**2D** (`polarization ∈ {:TM, :TE}`, `c` has length N = |orbit|):
 ```
-f_b = Σ_{i: kvGsv[i]+b ∈ orbit} ê_{q_i+b}†ê_{q_i} · conj(c[j(i)]) · c[i]   (j(i) = index of kvGsv[i]+b)
+f_b = Σ_{i: kvGsv[i]+b ∈ orbit} ê_{q_i+b}†ê_{q_i} · conj(c[j(i)]) · c[i]
 ```
+Polarization overlap ê†ê is 1 for `:TM` and `q̂_{q+b}·q̂_q` for `:TE`.
 
-The polarization overlap ê_{q+b}†ê_q is 1 for `:TM` and `q̂_{q+b}·q̂_q` for `:TE`.
+**3D** (`polarization === nothing`, `c` has length 2N, indexed μ(i,τ) = (i-1)·2+τ):
+```
+f_b = Σᵢ cⱼ† · (evs[j]' * evs[i]) · cᵢ
+```
+where `cᵢ = [c[2i-1], c[2i]]`, `evs[i]` is the 3×2 transverse frame at qᵢ, and
+`evs[j]' * evs[i]` is the 2×2 polarization-overlap matrix.  `Gs` is required for 3D.
 
 # Arguments
-- `c`: coefficient vector (e.g. a column of `symmetry_adapted_coefficients` output)
+- `c`: coefficient vector (column of `symmetry_adapted_coefficients` output)
 - `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
 - `b`: displacement vector in fractional reciprocal coordinates
-- `Gs`: reciprocal basis (required for `:TE`; may be `nothing` for `:TM`)
-- `polarization`: `:TM` (default) or `:TE`
+- `Gs`: reciprocal basis (required for `:TE` and 3D; may be `nothing` for `:TM`)
+- `polarization`: `:TM`, `:TE` (2D), or `nothing` (3D)
 - `atol`: tolerance for matching `kvGsv[i] + b` to orbit points
 """
 function geometric_factor(
     c::AbstractVector{<:Number},
-    kvGsv::AbstractVector{<:StaticVector},
+    kvGsv::AbstractVector{<:StaticVector{D}},
     b;
     Gs = nothing,
     polarization::Union{Symbol, Nothing} = :TM,
     atol::Real = 1e-10,
-)
+) where D
+    if D == 3
+        Gs === nothing && error("Gs must be supplied for 3D geometric_factor")
+        evs = _3d_polarization_vectors(kvGsv, Gs)
+        return _geometric_factor_3d(c, kvGsv, b, evs; atol)
+    end
+    # 2D path
     polarization === :TE && Gs === nothing &&
         error("Gs must be supplied when polarization === :TE")
     Gm = polarization === :TE ? stack(Gs) : nothing
-    f  = zero(ComplexF64)
+    return _geometric_factor_2d(c, kvGsv, b, Gm, polarization; atol)
+end
+
+# 2D inner implementation, separated so frequency_shifts can pass Gm/polarization
+# directly without re-checking them per b-vector.
+function _geometric_factor_2d(
+    c::AbstractVector{<:Number},
+    kvGsv::AbstractVector{<:StaticVector{2}},
+    b,
+    Gm,               # stack(Gs) for :TE, nothing for :TM
+    polarization::Symbol;
+    atol::Real = 1e-10,
+)
+    f = zero(ComplexF64)
     for i in eachindex(kvGsv)
         q_plus_b = kvGsv[i] .+ b
         j = find_orbit_index(q_plus_b, kvGsv; atol)
         j === nothing && continue
-        polarization_overlap = if polarization === :TE
-            _te_overlap(Gm * kvGsv[i], Gm * q_plus_b)
-        else
-            one(Float64)
-        end
-        f += polarization_overlap * conj(c[j]) * c[i]
+        pol_overlap = polarization === :TE ?
+            _te_overlap(Gm * kvGsv[i], Gm * q_plus_b) : one(Float64)
+        f += pol_overlap * conj(c[j]) * c[i]
+    end
+    return f
+end
+
+# 3D inner implementation: c indexed by μ(i,τ) = (i-1)·2+τ; evs[i] is 3×2 transverse frame.
+function _geometric_factor_3d(
+    c::AbstractVector{<:Number},
+    kvGsv::AbstractVector{<:StaticVector{3}},
+    b,
+    evs::AbstractVector{<:SMatrix{3,2}};
+    atol::Real = 1e-10,
+)
+    f = zero(ComplexF64)
+    for i in eachindex(kvGsv)
+        q_plus_b = kvGsv[i] .+ b
+        j = find_orbit_index(q_plus_b, kvGsv; atol)
+        j === nothing && continue
+        # 2-vectors of polarization amplitudes at orbit points i and j
+        cᵢ = SVector(c[2i-1], c[2i])
+        cⱼ = SVector(c[2j-1], c[2j])
+        # 2×2 overlap matrix: P_{τ'τ} = evs[j][:,τ'] · evs[i][:,τ]
+        P = evs[j]' * evs[i]
+        f += dot(cⱼ, P * cᵢ)   # = cⱼ† P cᵢ
     end
     return f
 end
@@ -153,17 +198,28 @@ function frequency_shifts(
     orbit = kvGsv[degeneracy_idx]
 
     # Γ matrices and symmetry-adapted coefficients
-    Γs = gamma_matrices(orbit, lg; polarization, atol)
+    Γs = gamma_matrices(orbit, lg; polarization, Gs, atol)
 
     # Find symmetry orbits of b-vectors connecting orbit points
     b_orbits = b_vector_orbits(orbit, lg; atol)
+
+    # Precompute what's needed for geometric factors (avoids recomputation per b-vector)
+    gf_precomp = if D == 3
+        _3d_polarization_vectors(orbit, Gs)          # evs::Vector{SMatrix{3,2}}
+    else
+        polarization === :TE ? stack(Gs) : nothing   # Gm or nothing
+    end
 
     function _make_terms(c)
         terms = ShiftTerm{D}[]
         for (canonical_b, orbit_bs) in b_orbits
             # Sum geometric factors over the orbit; coefficient is real for physical
             # (Hermitian) Δε since G_k pairs each b with a conjugate b' s.t. f_{b'}=f_b*.
-            A = sum(b′ -> geometric_factor(c, orbit, b′; Gs, polarization, atol), orbit_bs)
+            A = if D == 3
+                sum(b′ -> _geometric_factor_3d(c, orbit, b′, gf_precomp; atol), orbit_bs)
+            else
+                sum(b′ -> _geometric_factor_2d(c, orbit, b′, gf_precomp, polarization; atol), orbit_bs)
+            end
             abs(real(A)) > atol || continue  # skip symmetry-forbidden (zero) contributions
             push!(terms, ShiftTerm{D}(ReciprocalPoint{D}(canonical_b),
                                       ReciprocalPoint{D}.(orbit_bs),
