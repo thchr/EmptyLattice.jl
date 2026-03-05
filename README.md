@@ -16,7 +16,7 @@ timereversal = true
 
 # create direct/reciprocal bases & build a set of bandreps
 cRs = directbasis(sgnum, D) # conventional direct basis
-cGs = reciprocalbasis(cRs)  # conventional reciprocal basis
+cGs = dualbasis(cRs)  # conventional reciprocal basis
 Gs = primitivize(cGs, centering(sgnum, D)) # primitive reciprocal basis (same in p4)
 
 cbrs = calc_bandreps(sgnum, Val(D); timereversal) # bandreps in conventional setting

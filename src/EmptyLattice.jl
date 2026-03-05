@@ -8,7 +8,6 @@ export spectrum, unique_spectrum, symmetries
 # ---------------------------------------------------------------------------------------- #
 
 include("fincke-pohst-enumeration.jl")
-include("PerturbationTheory/PerturbationTheory.jl")
 
 # ---------------------------------------------------------------------------------------- #
 
@@ -36,19 +35,21 @@ function _uniqify!(
 )
     isempty(ωs) && return similar(ωs)
     ωs′ = issorted ? ωs : sort!(ωs)
+    unique_ωs = Vector{Float64}(undef, Nfreq)
     current_ω = first(ωs′)
-    unique_ωs = [current_ω]
+    unique_ωs[1] = current_ω
+    Nfreq == 1 && return unique_ωs
+    idx = 2
     for ω in @view ωs′[2:end]
         if !isapprox(ω, current_ω; atol)
             current_ω = ω
-            push!(unique_ωs, ω)
+            unique_ωs[idx] = ω
+            idx += 1
+            idx > Nfreq && break
         end
-        length(unique_ωs) == Nfreq && break
     end
-    
-    if length(unique_ωs) < Nfreq
-        error("too few unique frequencies: increase maxN or reduce Nfreq")
-    end
+    idx - 1 ≠ Nfreq && error("too few unique frequencies: increase maxN or reduce Nfreq")
+
     return unique_ωs
 end
 
@@ -57,6 +58,7 @@ end
 function _throw_Nfreq_count_error(Nfreq, maxN)
     error(lazy"`Nfreq` = $Nfreq exceeds total number of plane-waves at `maxN` = $maxN: increase `maxN` or reduce `Nfreq`")
 end
+
 """
     spectrum(kv, Gs; maxN=3, Nfreq=(2maxN+1)^D, digit_tol=10, verbose=false)
 
@@ -131,7 +133,7 @@ end
 
 for f in (:spectrum, :unique_spectrum)
     @eval function $f(kv::StaticVector{D, <:Real}, Rs::DirectBasis{D}; kwargs...) where D
-        return $f(kv, reciprocalbasis(Rs); kwargs...)
+        return $f(kv, dualbasis(Rs); kwargs...)
     end
     @eval function $f(kv::StaticVector{D, <:Real}, sgnum::Integer; kwargs...) where D
         Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
