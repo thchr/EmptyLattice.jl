@@ -210,19 +210,22 @@ end
 
 """
     b_vector_orbits(kvGsv, lg; atol=1e-10)
-        -> Vector{Tuple{SVector{D,Float64}, Vector{SVector{D,Float64}}}}
+        -> Vector{Tuple{ReciprocalPoint{D}, Vector{ReciprocalPoint{D}}, Vector{ComplexF64}}}
 
 Find symmetry orbits of connecting b-vectors `b = qⱼ - qᵢ` (i ≠ j) under the little
-group `lg`.
+group `lg`, and compute the phase relations between their Fourier components.
 
 The little group G_k acts on b-vectors in **fractional reciprocal coordinates** as:
 ```
 g maps b ↦ (W⁻¹)ᵀ b    (W = rotation(g) in fractional direct coordinates)
 ```
 
-Returns a `Vector` of `(canonical_b, orbit_bs)` pairs, one per distinct orbit, where
-`canonical_b` is the first-encountered representative and `orbit_bs` lists all b-vectors
-in the orbit (including `canonical_b` itself).
+Returns a `Vector` of `(canonical_b, orbit_bs, phases)` triples, one per distinct orbit:
+- `canonical_b`: first-encountered representative b-vector
+- `orbit_bs`: all b-vectors in the orbit (including `canonical_b` as the first element)
+- `phases`: `ComplexF64` coefficients such that `phases[i] * Δε[orbit_bs[i]] = Δε[canonical_b]`;
+  `phases[1] = 1` by definition. For a perturbation invariant under g = (W,w) mapping
+  `canonical_b → b′`, the phase is `exp(+2πi b′·w)` (fractional coordinates).
 
 # Arguments
 - `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
@@ -234,30 +237,39 @@ function b_vector_orbits(
     lg::LittleGroup{D};
     atol::Real = 1e-10,
 ) where D
-    # Collect all distinct b = qⱼ - qᵢ (i ≠ j)
-    all_bs = SVector{D, Float64}[]
+    # Collect all distinct b = qⱼ - qᵢ (i ≠ j).
+    # NB: use isapprox(..., nothing, #=modw=#false) to compare without modular reduction
+    #     (by default, Bravais's `isapprox` for ReciprocalPoint uses modw=true, which would
+    #     incorrectly identify e.g. [1,0] and [-1,0] as equivalent BZ points)
+    all_bs = ReciprocalPoint{D}[]
     for i in eachindex(kvGsv), j in eachindex(kvGsv)
         i == j && continue
-        b = kvGsv[j] - kvGsv[i]
-        any(b′ -> isapprox(b, b′; atol), all_bs) || push!(all_bs, b)
+        b = ReciprocalPoint{D}(kvGsv[j] - kvGsv[i])
+        if !any(b′ -> isapprox(b, b′, nothing, #=modw=#false; atol), all_bs)
+            push!(all_bs, b)
+        end
     end
 
-    # Group into orbits: g ∈ lg maps b → rotation(inv(g))' * b
+    # Group into orbits: g ∈ lg maps b → g * b.
+    # Track the phase for each orbit member: coefs[i] · Δε[b_i] = Δε[canonical_b],
     assigned = falses(length(all_bs))
-    orbits = Tuple{SVector{D,Float64}, Vector{SVector{D,Float64}}}[]
+    orbits = Tuple{ReciprocalPoint{D}, Vector{ReciprocalPoint{D}}, Vector{ComplexF64}}[]
     for (i, b) in enumerate(all_bs)
         assigned[i] && continue
-        orbit_bs = SVector{D, Float64}[b]
+        orbit_bs = ReciprocalPoint{D}[b]
+        phases   = ComplexF64[1.0 + 0.0im]   # canonical b has phase 1 by definition
         assigned[i] = true
         for g in lg
-            W_inv  = rotation(inv(g))
-            b_img  = SVector{D, Float64}(W_inv' * b)
-            j = findfirst(b′ -> isapprox(b_img, b′; atol), all_bs)
+            b_img = g * b
+            j = findfirst(b′ -> isapprox(b_img, b′, nothing, #=modw=# false; atol), all_bs)
             j !== nothing && !assigned[j] || continue
+            # Phase: coefs[i] · Δε[b_i] = Δε[canonical], so coefs[i] = exp(+2πi b_i·w)
+            phase = cispi(+2 * dot(parent(b_img), translation(g)))
             push!(orbit_bs, all_bs[j])
+            push!(phases, phase)
             assigned[j] = true
         end
-        push!(orbits, (b, orbit_bs))
+        push!(orbits, (b, orbit_bs, phases))
     end
     return orbits
 end

@@ -212,18 +212,18 @@ function frequency_shifts(
 
     function _make_terms(c)
         terms = ShiftTerm{D}[]
-        for (canonical_b, orbit_bs) in b_orbits
-            # Sum geometric factors over the orbit; coefficient is real for physical
+        for (canonical_b, orbit_bs, phases) in b_orbits
+            # sum geometric factors over the orbit; coefficient is real for physical
             # (Hermitian) Δε since G_k pairs each b with a conjugate b' s.t. f_{b'}=f_b*.
             A = if D == 3
                 sum(b′ -> _geometric_factor_3d(c, orbit, b′, gf_precomp; atol), orbit_bs)
             else
                 sum(b′ -> _geometric_factor_2d(c, orbit, b′, gf_precomp, polarization; atol), orbit_bs)
             end
-            abs(real(A)) > atol || continue  # skip symmetry-forbidden (zero) contributions
-            push!(terms, ShiftTerm{D}(ReciprocalPoint{D}(canonical_b),
-                                      ReciprocalPoint{D}.(orbit_bs),
-                                      real(A)))
+            abs(imag(A)) > atol && error("unexpectedly large imaginary part in geometric factor (= $A)")
+            abs(real(A)) > atol || continue  # skip symmetry-forbidden (=zero) contributions
+            rels = OrbitRelations{D}(orbit_bs, phases)
+            push!(terms, ShiftTerm{D}(canonical_b, rels, real(A)))
         end
         return terms
     end

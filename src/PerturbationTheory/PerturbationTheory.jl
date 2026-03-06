@@ -18,7 +18,7 @@ import Bravais: ReciprocalPoint # concrete reciprocal-space point type
 export gamma_matrix, gamma_matrices, b_vector_orbits
 export symmetry_adapted_coefficients
 export geometric_factor, frequency_shifts
-export ShiftTerm, IrrepShiftExpr
+export OrbitRelations, ShiftTerm, IrrepShiftExpr
 export evaluate
 
 # ---------------------------------------------------------------------------------------- #

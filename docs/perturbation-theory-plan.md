@@ -207,6 +207,22 @@ Test content:
 - `frequency_shifts` runs without error and returns a `Collection{IrrepShiftExpr{3}}`
 - `evaluate` gives the expected pattern of shifts (regression, or analytical if tractable)
 
+### TODO: test `frequency_shifts` for a non-symmorphic space group
+
+`b_vector_orbits` correctly computes complex phases for non-symmorphic groups (confirmed
+for P4₁, sgnum=76, k=A: b=[1,0,1] orbit has phases {1,−1,−i,+i}).  However, all
+degeneracies at k=A in P4₁ have orbit size 8 × 2 polarizations = 16D, and only four 1D
+irreps are available → each irrep has multiplicity 4 → `frequency_shifts` always errors.
+
+We need to find a 3D non-symmorphic space group and k-point where:
+- The little group has a screw axis with w=(0,0,1/4) (or similar giving complex phases),
+- AND the orbit × polarization space decomposes into single-copy irreps.
+
+This is required to exercise the `evaluate` path for non-symmorphic perturbations and to
+verify that `frequency_shifts` respects the correct phase relations when computing the
+orbit-summed geometric factors.  Until this is found, complex-phase behaviour is tested
+only at the `b_vector_orbits` / `OrbitRelations` display level (`test_p41_orbit_phases.jl`).
+
 ---
 
 ## Phase 4: Multiple-Copy Irrep Degeneracy (future)
