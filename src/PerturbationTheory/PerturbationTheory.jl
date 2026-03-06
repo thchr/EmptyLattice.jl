@@ -6,8 +6,9 @@ module PerturbationTheory
 # For a given k-point, reciprocal basis, and space/plane group, this module computes:
 # - Γ representation matrices Γ_{q'τ', qτ}(g) for each symmetry operation g
 # - Symmetry-adapted coefficient vectors c_{q,n}^{(α)} (via projection operators)
-# - Symbolic first-order frequency-shift expressions as Collection{IrrepShiftExpr}
-# - Numerical shifts via evaluate(es, Δε_fourier)  (es = Collection{IrrepShiftExpr})
+# - Symbolic first-order frequency-shift expressions as Collection{<:AbstractShiftExpr}
+#     IrrepShiftExpr (M=1), DoubletShiftExpr (M=2), MultipletShiftExpr (M≥3)
+# - Numerical shifts via evaluate(es, Δε_fourier)
 # ---------------------------------------------------------------------------------------- #
 
 using StaticArrays, Crystalline, LinearAlgebra

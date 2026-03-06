@@ -48,6 +48,9 @@ end
         _, kvGsv = unique_spectrum(kv, Gs; Nfreq=1)
         orbit = kvGsv[1]
 
+        # Use the little group directly here: this is a unit test of b_vector_orbits
+        # phase computation.  In frequency_shifts, the full space group is used instead
+        # (to correctly merge b ↔ -b orbits at non-TRIM k-points).
         b_orbits = b_vector_orbits(orbit, lg)
 
         # Find the orbit with canonical [1,1]
@@ -88,6 +91,7 @@ end
         orbit = kvGsv[orbit_idx]
         @test length(orbit) == 8
 
+        # Little group used directly (unit test of phase computation).
         b_orbits = b_vector_orbits(orbit, lg)
 
         # Find the orbit with canonical [2,1]

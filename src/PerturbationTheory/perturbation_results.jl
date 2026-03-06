@@ -226,33 +226,6 @@ function Base.show(io::IO, ::MIME"text/plain", e::IrrepShiftExpr)
 end
 
 # ──────────────────────────────────────────────────────────────────────────────────────── #
-# Collection{IrrepShiftExpr} display
-# ──────────────────────────────────────────────────────────────────────────────────────── #
-
-# Full table display for the Collection
-function Base.show(io::IO, ::MIME"text/plain", es::Collection{IrrepShiftExpr{D}}) where D
-    summary(io, es)
-    isempty(es) && return nothing
-
-    pol = first(es).polarization :: Union{Nothing, Symbol}
-    pol_str = isnothing(pol) ? "" : string(pol::Symbol) * ", "
-    ω = first(es).ω
-    println(io, " (", pol_str, "ω ≈ ", round(ω; digits=4), "):")
-    for (i, e) in enumerate(es)
-        show(io, e)
-        i ≠ length(es) && println(io)
-    end
-end
-
-# Compact inline display
-function Base.show(io::IO, es::Collection{IrrepShiftExpr{D}}) where D
-    summary(io, es)
-    print(io, "[")
-    join(io, (label(e.lgir) for e in es), ", ")
-    print(io, "]")
-end
-
-# ──────────────────────────────────────────────────────────────────────────────────────── #
 # M > 1 types: MultipletShiftTerm, DoubletShiftExpr, MultipletShiftExpr
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 
@@ -261,7 +234,7 @@ end
 
 One term in the first-order frequency-shift expression for a multiply-appearing irrep (M>1).
 
-Analogous to `ShiftTerm{D}` but with an `M×M` real symmetric coefficient matrix:
+Analogous to `ShiftTerm{D}` but with an `M×M` Hermitian coefficient matrix:
 ```
 W^(α) ∋ -(ω/2ε) · coefficient · Δε[canonical_b]
 ```
@@ -292,11 +265,12 @@ end
     DoubletShiftExpr{D} <: AbstractShiftExpr{D}
 
 First-order frequency-shift expression for an irrep appearing with multiplicity M=2.
-The perturbation matrix W^(α) = -(ω/2ε) Σ A_{[b]} Δε[b] is 2×2 real symmetric;
+The perturbation matrix W^(α) = -(ω/2ε) Σ A_{[b]} Δε[b] is 2×2 Hermitian;
 its two eigenvalues give the two first-order shifts, computed analytically via:
 ```
-Δω_{1,2} = -(ω/2ε) · (Tr W ± √(2 Tr[W²] - (Tr W)²)) / 2
+Δω_{1,2} = (a+d)/2 ± √((a-d)²/4 + |c|²)
 ```
+where `a = W₁₁`, `d = W₂₂` (real), `c = W₁₂` (complex).
 
 # Fields
 - `lgir::LGIrrep{D}`: the little-group irrep
@@ -356,6 +330,15 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", e::MultipletShiftExpr)
     show(io, e)
+    isempty(e.terms) && return nothing
+    # Trace annotation: Σ eigenvalues = -(ω/2ε)·L where L = Σ_k Tr(A_k)·Δε[bₖ].
+    # _print_linform is defined in doublet_eigenvalues.jl (included after this file).
+    tr_coefs = [real(tr(t.coefficient)) for t in e.terms]
+    if !all(x -> abs(x) < 1e-10, tr_coefs)
+        printstyled(io, "\n    L = "; color=:light_black)
+        _print_linform(io, tr_coefs, e.terms)
+        printstyled(io, "  [Σ shifts = -(ω/2ε)·L]"; color=:light_black)
+    end
     header = "\n    orbits: "
     indent = "\n" * " "^(length(header)-1)
     for (i, t) in enumerate(e.terms)
@@ -430,6 +413,23 @@ function evaluate(
     return result
 end
 
+# Single-element evaluate for IrrepShiftExpr → Vector{Float64} (length 1).
+# Used by the Collection{<:AbstractShiftExpr} evaluate to dispatch uniformly.
+function evaluate(
+    e           :: IrrepShiftExpr,
+    Δε_fourier  :: Dict,
+    ε           :: Real = 1.0;
+    atol        :: Real = 1e-10,
+)
+    Δω = 0.0
+    for term in e.terms
+        Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b); atol)
+        Δε_b === nothing && continue
+        Δω += Δε_b * term.coefficient
+    end
+    return [-(e.ω / (2ε)) * Δω]
+end
+
 # Compute the orbit-summed perturbation matrix W for a multiplet expression.
 function _eval_W_matrix(terms::Vector{<:MultipletShiftTerm}, Δε_fourier::Dict, ω::Real, ε::Real; atol)
     M = size(first(terms).coefficient, 1)
@@ -498,19 +498,7 @@ function evaluate(
     isempty(es) && error("cannot evaluate an empty Collection{<:AbstractShiftExpr}")
     result = Dict{String, Vector{Float64}}()
     for e in es
-        shifts = if e isa IrrepShiftExpr
-            ω = e.ω
-            Δω = 0.0
-            for term in e.terms
-                Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b); atol)
-                Δε_b === nothing && continue
-                Δω += Δε_b * term.coefficient
-            end
-            [-(ω / (2ε)) * Δω]
-        else
-            evaluate(e, Δε_fourier, ε; atol)
-        end
-        result[label(e.lgir)] = shifts
+        result[label(e.lgir)] = evaluate(e, Δε_fourier, ε; atol)
     end
     return result
 end

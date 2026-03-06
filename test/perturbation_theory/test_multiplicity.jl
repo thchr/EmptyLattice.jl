@@ -1,6 +1,6 @@
 # Test: degenerate perturbation theory for irreps with multiplicity M > 1.
 #
-# Two reference cases:
+# Three reference cases:
 #
 # 1. P̄1 (sgnum=2, 3D) at X=[½,0,0]:
 #    Each of the two 1D irreps X₁⁺ and X₁⁻ appears with M=2 (the two transverse
@@ -15,8 +15,15 @@
 #    b-orbits.  Consequently Tr(W) = 0 and the two frequency shifts always sum to zero,
 #    regardless of the Fourier components Δε.
 #
-# Both cases use DoubletShiftExpr (M=2), so this exercises the full M=2 code path including
-# multiplicity_adapted_coefficients, _geometric_factor_matrix_*, and evaluate(::DoubletShiftExpr).
+# 3. p6mm (sgnum=17, 2D) at K=[⅓,⅓] (non-TRIM), TM:
+#    The K-point little group G_K = C₃v lacks C₂, so using only G_K for b_vector_orbits
+#    splits each Δε-orbit into two sub-orbits (b and -b land in separate G_K-orbits).
+#    This previously caused "geometric factor matrix is not Hermitian" errors.  The fix
+#    uses the full space group C₆v (which contains C₂) for b_vector_orbits.  This test
+#    verifies the fix: frequency_shifts must not error, and all coefficient matrices must
+#    be Hermitian.
+#
+# Cases 1–2 use DoubletShiftExpr (M=2); case 3 uses whatever M appears at K idx=3.
 
 using Test, Crystalline, LinearAlgebra, StaticArrays
 using EmptyLattice
@@ -112,6 +119,37 @@ using EmptyLattice.PerturbationTheory
             @test length(sv) == 2
             @test sv[1] ≤ sv[2]
             @test isapprox(sv[1] + sv[2], 0.0; atol=1e-10)
+        end
+    end
+
+    # ── p6mm (sgnum=17, 2D), K-point, TM: full-SG orbit fix ──────────────────────── #
+    @testset "p6mm (sgnum=17, 2D) K-point TM: Hermitian A from full-SG orbit" begin
+        sgnum = 17; D = 2
+        Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+        Gs = dualbasis(Rs)
+        lgirs = lgirreps(sgnum, Val(D))["K"]
+
+        # degeneracy_idx=3 previously triggered "geometric factor matrix is not Hermitian"
+        # because G_K = C₃v lacks C₂, splitting the b-orbit of b and -b.  The fix uses
+        # the full space group (C₆v) for b_vector_orbits, which contains C₂ and merges
+        # the sub-orbits.  If the fix is working this call must not error.
+        es = frequency_shifts(lgirs, 3; polarization=:TM, Gs)
+
+        @test es isa Collection{<:AbstractShiftExpr{2}}
+
+        # All MultipletShiftTerm coefficient matrices must be Hermitian.
+        for e in es
+            for t in e.terms
+                t isa ShiftTerm && continue  # scalar coefficient; no Hermitian check needed
+                @test norm(t.coefficient - t.coefficient') < 1e-10
+            end
+        end
+
+        # Must evaluate without error given any Δε.
+        non_empty = findfirst(e -> !isempty(e.terms), collect(es))
+        if non_empty !== nothing
+            t1 = es[non_empty].terms[1]
+            @test evaluate(es, Dict(t1.canonical_b => 0.5)) isa Dict
         end
     end
 

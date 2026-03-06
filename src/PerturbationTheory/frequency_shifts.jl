@@ -177,10 +177,10 @@ High-level interface: compute symbolic first-order frequency-shift expressions f
 irreps in `lgirs` that are featured at the `degeneracy_idx`-th unique frequency of the
 empty-lattice spectrum at the k-point encoded in `lgirs`.
 
-The featured irreps are determined via `planewave_symeigs` + `find_representation`:
-only irreps with multiplicity 1 in the symmetry eigenvalue decomposition are included.
+The featured irreps are determined via `planewave_symeigs` + `find_representation`.
 Irreps with multiplicity 0 are absent at this degeneracy and omitted from the result.
-Multiplicity > 1 triggers an error (degenerate perturbation theory is not yet implemented).
+Irreps with multiplicity M=1 produce `IrrepShiftExpr` entries; M=2 produces
+`DoubletShiftExpr`; M≥3 produces `MultipletShiftExpr`.
 
 Internally:
 1. Calls `unique_spectrum` and `planewave_symeigs` to find the orbit and symmetry

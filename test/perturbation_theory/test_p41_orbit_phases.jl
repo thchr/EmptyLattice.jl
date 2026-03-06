@@ -10,11 +10,10 @@
 #   4₀₀₁⁺ maps b=[1,0,1] → b'=[0,1,1],   phase = exp(-2πi·(0,1,1)·(0,0,1/4))  = -i
 #   4₀₀₁⁻ maps b=[1,0,1] → b'=[0,-1,1],  phase = exp(-2πi·(0,-1,1)·(0,0,3/4)) = +i
 #
-# NOTE: `frequency_shifts` cannot be tested for P4₁ at k=A because all degeneracies
-# there have orbit size 8 (×2 polarizations = 16D), and the only available irreps are
-# four 1D irreps (A₁–A₄), each appearing with multiplicity 4 → multiplicity > 1 error.
-# Testing `frequency_shifts` for a non-symmorphic space group where all irreps appear
-# with multiplicity 1 is left as a TODO (Phase 4+).
+# NOTE: `frequency_shifts` is not tested here for P4₁ at k=A because all degeneracies
+# there have orbit size 8 (×2 polarizations = 16D), with four 1D irreps (A₁–A₄) each
+# appearing with multiplicity M=4.  While M>1 is supported (Phase 4), there is no
+# hand-derived analytical reference for P4₁ A-point to check against.
 #
 # This test covers:
 #   1. Direct verification that `b_vector_orbits` computes the complex phases correctly.
