@@ -1,18 +1,39 @@
 # Result types for first-order perturbation theory.
 #
 # Expression layer — symbolic form Δω = -(ω/2ε) Σ A·Δε[b]:
-#     ShiftTerm{D}             — one b-vector orbit with its coefficient A = Σ_orbit f_b
-#     IrrepShiftExpr{D}        — all ShiftTerms for a single irrep; also stores ω and polarization
-#     Collection{IrrepShiftExpr{D}} — standard Crystalline collection over all irreps at a k-point
+#     ShiftTerm{D}             — one b-vector orbit with its scalar coefficient A (M=1)
+#     IrrepShiftExpr{D}        — all ShiftTerms for a single irrep (M=1)
+#     MultipletShiftTerm{D}    — one b-vector orbit with its M×M coefficient matrix A (M>1)
+#     DoubletShiftExpr{D}      — M=2 case; eigenvalues from analytical formula
+#     MultipletShiftExpr{D}    — M>2 case; eigenvalues from numerical eigvals
+#
+# All expression types are subtypes of AbstractShiftExpr{D}.
 #
 # The high-level workflow is:
-#   es = frequency_shifts(lgirs; polarization, Gs)   → Collection{IrrepShiftExpr}
-#   Δωs  = evaluate(es, Δε_fourier; ε)               → Dict{String, Float64}
+#   es = frequency_shifts(lgirs; polarization, Gs)   → Collection{IrrepShiftExpr} (M=1 only)
+#                                                       or Collection{AbstractShiftExpr} (any M>1)
+#   Δωs  = evaluate(es, Δε_fourier; ε)               → Dict{String, Float64}   (M=1 collection)
+#                                                       or Dict{String, Vector{Float64}} (M>1)
 
 import Crystalline: Collection, dim, num
 
 # ──────────────────────────────────────────────────────────────────────────────────────── #
-# Expression layer
+# Abstract supertype
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+
+"""
+    AbstractShiftExpr{D}
+
+Abstract supertype for first-order frequency-shift expressions at a single irrep.
+All concrete subtypes store a `.lgir::LGIrrep{D}` field.
+"""
+abstract type AbstractShiftExpr{D} end
+
+Crystalline.dim(e::AbstractShiftExpr) = dim(e.lgir)
+Crystalline.num(e::AbstractShiftExpr) = num(e.lgir)
+
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+# Shared orbit type
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 
 """
@@ -43,10 +64,14 @@ struct OrbitRelations{D}
     coefs :: Vector{ComplexF64}
 end
 
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+# M = 1 types: ShiftTerm and IrrepShiftExpr
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+
 """
     ShiftTerm{D}
 
-One term in the first-order frequency-shift expression for a single irrep.
+One term in the first-order frequency-shift expression for a single irrep (M=1 case).
 
 Represents the contribution from one symmetry orbit of Fourier wavevectors to the shift:
 ```
@@ -124,7 +149,11 @@ function _print_orbit_chain(io::IO, rels::OrbitRelations; styling_kws...)
     for (i, (b, c)) in enumerate(zip(rels.orbit, rels.coefs))
         i ≠ 1 && printstyled(io, " = "; styling_kws...)
         pfx = _phase_prefix(c)
-        printstyled(io, pfx, "Δε", _b_label(b); styling_kws..., bold=(i==1))
+        if i == 1
+            printstyled(io, "Δε", _b_label(b); styling_kws..., bold=true, color=:normal)
+        else
+            printstyled(io, pfx, "Δε", _b_label(b); styling_kws...)
+        end
     end
 end
 
@@ -138,14 +167,15 @@ end
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 
 """
-    IrrepShiftExpr{D}
+    IrrepShiftExpr{D} <: AbstractShiftExpr{D}
 
-First-order frequency-shift expression for a single irrep, as a sum of `ShiftTerm`s:
+First-order frequency-shift expression for a single irrep (multiplicity M=1), as a sum
+of `ShiftTerm`s:
 ```
 Δω = -(ω/2ε) Σ_k coefficient_k · Δε[canonical_b_k]
 ```
 
-Implements `Crystalline.dim` and `Crystalline.num` (delegating to the stored `LGIrrep`),
+Implements `Crystalline.dim` and `Crystalline.num` (via `AbstractShiftExpr`),
 so that `Collection{IrrepShiftExpr{D}}` supports the standard Crystalline collection API.
 
 # Fields
@@ -154,15 +184,12 @@ so that `Collection{IrrepShiftExpr{D}}` supports the standard Crystalline collec
 - `polarization::Union{Symbol,Nothing}`: `:TM`, `:TE`, or `nothing` (3D)
 - `terms::Vector{ShiftTerm{D}}`: one term per distinct b-vector orbit
 """
-struct IrrepShiftExpr{D}
+struct IrrepShiftExpr{D} <: AbstractShiftExpr{D}
     lgir        :: LGIrrep{D}
     ω           :: Float64
     polarization:: Union{Symbol, Nothing}
     terms       :: Vector{ShiftTerm{D}}
 end
-
-Crystalline.dim(e::IrrepShiftExpr) = dim(e.lgir)
-Crystalline.num(e::IrrepShiftExpr) = num(e.lgir)
 
 function Base.show(io::IO, e::IrrepShiftExpr)
     print(io, label(e.lgir), ": Δω = ")
@@ -193,7 +220,7 @@ function Base.show(io::IO, ::MIME"text/plain", e::IrrepShiftExpr)
     header = "\n    orbits: "
     indent = "\n" * " "^(length(header)-1)
     for (i, t) in enumerate(e.terms)
-        i == 1 ? printstyled(io, header; color=:light_black) : print(io, indent)
+        i == 1 ? printstyled(io, header; color=:blue) : print(io, indent)
         _print_orbit_chain(io, t.orbit_relations; color=:light_black)
     end
 end
@@ -226,7 +253,140 @@ function Base.show(io::IO, es::Collection{IrrepShiftExpr{D}}) where D
 end
 
 # ──────────────────────────────────────────────────────────────────────────────────────── #
-# evaluate: Collection{IrrepShiftExpr} × Δε → Dict{String, Float64}
+# M > 1 types: MultipletShiftTerm, DoubletShiftExpr, MultipletShiftExpr
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+
+"""
+    MultipletShiftTerm{D}
+
+One term in the first-order frequency-shift expression for a multiply-appearing irrep (M>1).
+
+Analogous to `ShiftTerm{D}` but with an `M×M` real symmetric coefficient matrix:
+```
+W^(α) ∋ -(ω/2ε) · coefficient · Δε[canonical_b]
+```
+where `coefficient = Σ_{b ∈ orbit} conj(phase_b) · f_{b;μμ'}^(α)` is the orbit-summed
+M×M geometric factor matrix.
+
+# Fields
+- `canonical_b::ReciprocalPoint{D}`: representative b-vector (fractional reciprocal coords)
+- `orbit_relations::OrbitRelations{D}`: orbit members and their mutual phase relations
+- `coefficient::Matrix{ComplexF64}`: M×M Hermitian orbit-summed geometric factor matrix
+"""
+struct MultipletShiftTerm{D}
+    canonical_b     :: ReciprocalPoint{D}
+    orbit_relations :: OrbitRelations{D}
+    coefficient     :: Matrix{ComplexF64}   # M×M Hermitian
+end
+
+function Base.show(io::IO, t::MultipletShiftTerm)
+    M = size(t.coefficient, 1)
+    b_int = (round(Int, x) for x in parent(t.canonical_b))
+    b_str = join(b_int, ",")
+    print(io, "$M×$M matrix · Δε[$b_str]")
+end
+
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+
+"""
+    DoubletShiftExpr{D} <: AbstractShiftExpr{D}
+
+First-order frequency-shift expression for an irrep appearing with multiplicity M=2.
+The perturbation matrix W^(α) = -(ω/2ε) Σ A_{[b]} Δε[b] is 2×2 real symmetric;
+its two eigenvalues give the two first-order shifts, computed analytically via:
+```
+Δω_{1,2} = -(ω/2ε) · (Tr W ± √(2 Tr[W²] - (Tr W)²)) / 2
+```
+
+# Fields
+- `lgir::LGIrrep{D}`: the little-group irrep
+- `ω::Float64`: unperturbed frequency
+- `polarization::Union{Symbol,Nothing}`: `:TM`, `:TE`, or `nothing` (3D)
+- `terms::Vector{MultipletShiftTerm{D}}`: one term per distinct b-vector orbit
+"""
+struct DoubletShiftExpr{D} <: AbstractShiftExpr{D}
+    lgir         :: LGIrrep{D}
+    ω            :: Float64
+    polarization :: Union{Symbol, Nothing}
+    terms        :: Vector{MultipletShiftTerm{D}}
+end
+
+# show methods for DoubletShiftExpr are defined in doublet_eigenvalues.jl
+
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+
+"""
+    MultipletShiftExpr{D} <: AbstractShiftExpr{D}
+
+First-order frequency-shift expression for an irrep appearing with multiplicity M>2.
+The perturbation matrix W^(α) = -(ω/2ε) Σ A_{[b]} Δε[b] is M×M Hermitian;
+its M real eigenvalues give the M first-order shifts, computed numerically via `eigvals`.
+
+# Fields
+- `lgir::LGIrrep{D}`: the little-group irrep
+- `ω::Float64`: unperturbed frequency
+- `polarization::Union{Symbol,Nothing}`: `:TM`, `:TE`, or `nothing` (3D)
+- `terms::Vector{MultipletShiftTerm{D}}`: one term per distinct b-vector orbit
+- `M::Int`: multiplicity
+"""
+struct MultipletShiftExpr{D} <: AbstractShiftExpr{D}
+    lgir         :: LGIrrep{D}
+    ω            :: Float64
+    polarization :: Union{Symbol, Nothing}
+    terms        :: Vector{MultipletShiftTerm{D}}
+    M            :: Int
+end
+
+function Base.show(io::IO, e::MultipletShiftExpr)
+    lbl = label(e.lgir)
+    print(io, join(Iterators.repeated(lbl, e.M), "+"), ": Δω ∈ ")
+    if isempty(e.terms)
+        print(io, "{", join(Iterators.repeated("0", e.M), ", "), "}")
+        printstyled(io, " (vanishing first-order shifts)"; color=:light_black)
+        return nothing
+    end
+    printstyled(io, "-(ω/2ε)·eigvals("; color=:light_black)
+    for (k, t) in enumerate(e.terms)
+        k > 1 && printstyled(io, " + "; color=:light_black)
+        show(io, t)
+    end
+    printstyled(io, ")"; color=:light_black)
+    return nothing
+end
+
+function Base.show(io::IO, ::MIME"text/plain", e::MultipletShiftExpr)
+    show(io, e)
+    header = "\n    orbits: "
+    indent = "\n" * " "^(length(header)-1)
+    for (i, t) in enumerate(e.terms)
+        i == 1 ? printstyled(io, header; color=:blue) : print(io, indent)
+        _print_orbit_chain(io, t.orbit_relations; color=:light_black)
+    end
+end
+
+# Collection{AbstractShiftExpr} display
+function Base.show(io::IO, ::MIME"text/plain", es::Collection{<:AbstractShiftExpr{D}}) where D
+    summary(io, es)
+    isempty(es) && return nothing
+    pol = first(es).polarization :: Union{Nothing, Symbol}
+    pol_str = isnothing(pol) ? "" : string(pol::Symbol) * ", "
+    ω = first(es).ω
+    println(io, " (", pol_str, "ω ≈ ", round(ω; digits=4), "):")
+    for (i, e) in enumerate(es)
+        show(io, e)
+        i ≠ length(es) && println(io)
+    end
+end
+
+function Base.show(io::IO, es::Collection{<:AbstractShiftExpr{D}}) where D
+    summary(io, es)
+    print(io, "[")
+    join(io, (label(e.lgir) for e in es), ", ")
+    print(io, "]")
+end
+
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+# evaluate
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 
 """
@@ -266,6 +426,91 @@ function evaluate(
             Δω += Δε_b * term.coefficient
         end
         result[label(irrse.lgir)] = -(ω / (2ε)) * Δω
+    end
+    return result
+end
+
+# Compute the orbit-summed perturbation matrix W for a multiplet expression.
+function _eval_W_matrix(terms::Vector{<:MultipletShiftTerm}, Δε_fourier::Dict, ω::Real, ε::Real; atol)
+    M = size(first(terms).coefficient, 1)
+    W = zeros(ComplexF64, M, M)
+    for term in terms
+        Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b); atol)
+        Δε_b === nothing && continue
+        W .+= Δε_b .* term.coefficient
+    end
+    return -(ω / (2ε)) .* W
+end
+
+"""
+    evaluate(e::DoubletShiftExpr, Δε_fourier::Dict, ε=1.0; atol=1e-10) -> Vector{Float64}
+
+Evaluate the two first-order frequency shifts for a doublet (M=2) irrep analytically.
+Returns a length-2 vector of shifts sorted in ascending order.
+"""
+function evaluate(
+    e           :: DoubletShiftExpr,
+    Δε_fourier  :: Dict,
+    ε           :: Real = 1.0;
+    atol        :: Real = 1e-10,
+)
+    isempty(e.terms) && return [0.0, 0.0]
+    W = _eval_W_matrix(e.terms, Δε_fourier, e.ω, ε; atol)
+    # Analytical eigenvalues of 2×2 Hermitian W = [a c; c* d] (a,d real):
+    #   λ₁₂ = (a+d)/2 ± √((a-d)²/4 + |c|²)
+    a, d = real(W[1,1]), real(W[2,2])
+    c = W[1,2]
+    half_gap = sqrt((a - d)^2 / 4 + abs2(c))
+    return sort([(a + d)/2 - half_gap, (a + d)/2 + half_gap])
+end
+
+"""
+    evaluate(e::MultipletShiftExpr, Δε_fourier::Dict, ε=1.0; atol=1e-10) -> Vector{Float64}
+
+Evaluate the M first-order frequency shifts for a multiplet (M>2) irrep numerically.
+Returns a length-M vector of shifts sorted in ascending order.
+"""
+function evaluate(
+    e           :: MultipletShiftExpr,
+    Δε_fourier  :: Dict,
+    ε           :: Real = 1.0;
+    atol        :: Real = 1e-10,
+)
+    isempty(e.terms) && return zeros(Float64, e.M)
+    W = _eval_W_matrix(e.terms, Δε_fourier, e.ω, ε; atol)
+    return eigvals(Hermitian(W))
+end
+
+"""
+    evaluate(es::Collection{<:AbstractShiftExpr}, Δε_fourier::Dict, ε=1.0; atol=1e-10)
+        -> Dict{String, Vector{Float64}}
+
+Evaluate frequency shifts for a mixed collection (may contain irreps of any multiplicity).
+Returns a `Dict` mapping irrep labels to `Vector{Float64}` of shifts (length 1 for M=1,
+length M for M>1). Shifts are sorted in ascending order within each entry.
+"""
+function evaluate(
+    es          :: Collection{<:AbstractShiftExpr},
+    Δε_fourier  :: Dict,
+    ε           :: Real = 1.0;
+    atol        :: Real = 1e-10,
+)
+    isempty(es) && error("cannot evaluate an empty Collection{<:AbstractShiftExpr}")
+    result = Dict{String, Vector{Float64}}()
+    for e in es
+        shifts = if e isa IrrepShiftExpr
+            ω = e.ω
+            Δω = 0.0
+            for term in e.terms
+                Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b); atol)
+                Δε_b === nothing && continue
+                Δω += Δε_b * term.coefficient
+            end
+            [-(ω / (2ε)) * Δω]
+        else
+            evaluate(e, Δε_fourier, ε; atol)
+        end
+        result[label(e.lgir)] = shifts
     end
     return result
 end

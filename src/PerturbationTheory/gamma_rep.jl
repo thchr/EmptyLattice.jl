@@ -209,13 +209,13 @@ function gamma_matrices(
 end
 
 """
-    b_vector_orbits(kvGsv, lg; atol=1e-10)
+    b_vector_orbits(kvGsv, g; atol=1e-10)
         -> Vector{Tuple{ReciprocalPoint{D}, Vector{ReciprocalPoint{D}}, Vector{ComplexF64}}}
 
-Find symmetry orbits of connecting b-vectors `b = qⱼ - qᵢ` (i ≠ j) under the little
-group `lg`, and compute the phase relations between their Fourier components.
+Find symmetry orbits of connecting b-vectors `b = qⱼ - qᵢ` (i ≠ j) under the symmetry
+group `g`, and compute the phase relations between their Fourier components.
 
-The little group G_k acts on b-vectors in **fractional reciprocal coordinates** as:
+The group acts on b-vectors in **fractional reciprocal coordinates** as:
 ```
 g maps b ↦ (W⁻¹)ᵀ b    (W = rotation(g) in fractional direct coordinates)
 ```
@@ -229,12 +229,16 @@ Returns a `Vector` of `(canonical_b, orbit_bs, phases)` triples, one per distinc
 
 # Arguments
 - `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
-- `lg`: little group of the k-point
+- `g`: symmetry group whose operations define Δε orbits; should be the full space group
+  (in primitive setting) so that Δε[b] and Δε[b′] are correctly identified as symmetry-
+  related even when b and b′ lie in different little-group sub-orbits.  Passing the
+  little group G_k is also supported but may split a single Δε-orbit into sub-orbits at
+  non-TRIM k-points (those lacking inversion in G_k).
 - `atol`: tolerance for approximate b-vector equality
 """
 function b_vector_orbits(
     kvGsv::AbstractVector{<:StaticVector{D}},
-    lg::LittleGroup{D};
+    lg;   # LittleGroup{D} or SpaceGroup{D} — any iterable of SymOperation{D}
     atol::Real = 1e-10,
 ) where D
     # Collect all distinct b = qⱼ - qᵢ (i ≠ j).

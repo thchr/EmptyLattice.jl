@@ -16,9 +16,11 @@ import ..planewave_symeigs      # defined in parent EmptyLattice module
 import Bravais: ReciprocalPoint # concrete reciprocal-space point type
 
 export gamma_matrix, gamma_matrices, b_vector_orbits
-export symmetry_adapted_coefficients
+export symmetry_adapted_coefficients, multiplicity_adapted_coefficients
 export geometric_factor, frequency_shifts
 export OrbitRelations, ShiftTerm, IrrepShiftExpr
+export MultipletShiftTerm, DoubletShiftExpr, MultipletShiftExpr
+export AbstractShiftExpr
 export evaluate
 
 # ---------------------------------------------------------------------------------------- #
@@ -27,6 +29,7 @@ include("polarizations.jl")
 include("gamma_rep.jl")
 include("coefficients.jl")
 include("perturbation_results.jl")
+include("doublet_eigenvalues.jl")
 include("frequency_shifts.jl")
 
 # ---------------------------------------------------------------------------------------- #

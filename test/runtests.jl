@@ -10,5 +10,6 @@ using Test
         include("perturbation_theory/test_pm3m_X.jl")
         include("perturbation_theory/test_p41_orbit_phases.jl")
         include("perturbation_theory/test_nonsymmorphic_phases_2d.jl")
+        include("perturbation_theory/test_multiplicity.jl")
     end
 end

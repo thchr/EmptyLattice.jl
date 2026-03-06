@@ -70,3 +70,56 @@ function symmetry_adapted_coefficients(
 
     return cs
 end
+
+"""
+    multiplicity_adapted_coefficients(lgir, Γs, M; atol=1e-12) -> Matrix{ComplexF64}
+
+Compute `M` orthonormal symmetry-adapted states for the `n = 1` partner row of irrep
+`lgir`, spanning the full `M`-dimensional multiplicity subspace (for use when irrep `lgir`
+appears with multiplicity `M ≥ 2` in the plane-wave representation).
+
+Applies the diagonal projection operator `P_{11}^{(α)}` to successive seed orbit points
+until `M` linearly independent results are found; orthogonalizes via Gram–Schmidt.
+
+Returns a `Matrix{ComplexF64}` of size `(norb, M)` where column `μ` is the `μ`-th
+multiplicity basis vector `|α, 1, μ⟩`.
+"""
+function multiplicity_adapted_coefficients(
+    lgir,
+    Γs::AbstractVector{<:AbstractMatrix},
+    M::Int;
+    atol::Real = 1e-12,
+)
+    Dmats = lgir()
+    norb  = size(first(Γs), 1)
+    nops  = length(Γs)
+
+    cs      = zeros(ComplexF64, norb, M)
+    n_found = 0
+
+    for seed_idx in 1:norb
+        n_found == M && break
+        # Apply P_{11}^{(α)} to seed plane-wave `seed_idx`
+        v = zeros(ComplexF64, norb)
+        for k in 1:nops
+            v .+= conj(Dmats[k][1, 1]) .* Γs[k][:, seed_idx]
+        end
+        norm(v) < atol && continue  # seed projects to zero for this irrep
+
+        # Gram–Schmidt: orthogonalize against existing basis vectors
+        for μ in 1:n_found
+            v .-= dot(cs[:, μ], v) .* cs[:, μ]
+        end
+        nrm = norm(v)
+        nrm < atol && continue  # linearly dependent on existing basis
+
+        n_found += 1
+        cs[:, n_found] .= v ./ nrm
+    end
+
+    n_found == M || error(
+        "multiplicity_adapted_coefficients: found only $n_found of $M independent " *
+        "projected vectors; check that `lgir` is correct and `M` matches the irrep multiplicity"
+    )
+    return cs
+end

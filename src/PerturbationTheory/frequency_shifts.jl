@@ -92,6 +92,55 @@ function _geometric_factor_2d(
     return f
 end
 
+# 2D inner implementation for M×M geometric factor matrix: cs[:,μ] are the M multiplicity
+# basis vectors; F[μ,μ'] = Σ_i pol_overlap · conj(cs[j,μ]) · cs[i,μ'].
+function _geometric_factor_matrix_2d(
+    cs::AbstractMatrix{<:Number},
+    kvGsv::AbstractVector{<:StaticVector{2}},
+    b,
+    Gm,
+    polarization::Symbol;
+    atol::Real = 1e-10,
+)
+    M = size(cs, 2)
+    F = zeros(ComplexF64, M, M)
+    for i in eachindex(kvGsv)
+        q_plus_b = kvGsv[i] .+ b
+        j = find_orbit_index(q_plus_b, kvGsv; atol)
+        j === nothing && continue
+        pol = polarization === :TE ?
+            _te_overlap(Gm * kvGsv[i], Gm * q_plus_b) : one(Float64)
+        for μ in 1:M, μ′ in 1:M
+            F[μ, μ′] += pol * conj(cs[j, μ]) * cs[i, μ′]
+        end
+    end
+    return F
+end
+
+# 3D inner implementation for M×M geometric factor matrix: cs indexed as cs[2i-1:2i, μ].
+function _geometric_factor_matrix_3d(
+    cs::AbstractMatrix{<:Number},
+    kvGsv::AbstractVector{<:StaticVector{3}},
+    b,
+    evs::AbstractVector{<:SMatrix{3,2}};
+    atol::Real = 1e-10,
+)
+    M = size(cs, 2)
+    F = zeros(ComplexF64, M, M)
+    for i in eachindex(kvGsv)
+        q_plus_b = kvGsv[i] .+ b
+        j = find_orbit_index(q_plus_b, kvGsv; atol)
+        j === nothing && continue
+        P = evs[j]' * evs[i]
+        for μ in 1:M, μ′ in 1:M
+            cᵢ = SVector(cs[2i-1, μ′], cs[2i, μ′])
+            cⱼ = SVector(cs[2j-1, μ],  cs[2j, μ])
+            F[μ, μ′] += dot(cⱼ, P * cᵢ)
+        end
+    end
+    return F
+end
+
 # 3D inner implementation: c indexed by μ(i,τ) = (i-1)·2+τ; evs[i] is 3×2 transverse frame.
 function _geometric_factor_3d(
     c::AbstractVector{<:Number},
@@ -142,9 +191,10 @@ Internally:
 5. For each present irrep, computes the orbit-summed geometric factor
    `A_{α,[b]} = Σ_{b' ∈ orbit} f_{b'}` for each b-orbit.
 
-Returns a `Collection{IrrepShiftExpr{D}}` over the featured irreps, storing the symbolic
-expressions and the unperturbed frequency `ω`. Call [`evaluate`](@ref) on the result to
-obtain numerical shifts.
+Returns a `Collection{IrrepShiftExpr{D}}` when all present irreps have multiplicity M=1,
+or a `Collection{AbstractShiftExpr{D}}` (containing `IrrepShiftExpr`, `DoubletShiftExpr`,
+and/or `MultipletShiftExpr` elements) when any irrep has M>1. Call [`evaluate`](@ref) on
+the result to obtain numerical shifts.
 
 # Arguments
 - `lgirs`: irreps at the k-point, e.g. `lgirreps(sgnum, Val(D))["M"]`
@@ -189,19 +239,19 @@ function frequency_shifts(
         "the symmetry eigenvalue at degeneracy_idx=$degeneracy_idx does not decompose " *
         "into the given irreps; check that `lgirs` is the correct irrep set for this k-point"
     )
-    any(m -> m > 1, irmults) && error(
-        "multiplicity > 1 found at degeneracy_idx=$degeneracy_idx: degenerate " *
-        "perturbation theory is required (not yet implemented)"
-    )
-
     ω     = ωs[degeneracy_idx]
     orbit = kvGsv[degeneracy_idx]
 
     # Γ matrices and symmetry-adapted coefficients
     Γs = gamma_matrices(orbit, lg; polarization, Gs, atol)
 
-    # Find symmetry orbits of b-vectors connecting orbit points
-    b_orbits = b_vector_orbits(orbit, lg; atol)
+    # Find symmetry orbits of b-vectors connecting orbit points.
+    # Use the full space group (primitivized) rather than just the little group, so that
+    # Δε[b] and Δε[-b] are correctly merged into a single orbit at non-TRIM k-points
+    # where inversion is absent from G_k (e.g. K in p6mm).  For TRIM k-points the little
+    # group already contains inversion, so the result is identical.
+    sg_prim = primitivize(spacegroup(num(lg), Val(D)))
+    b_orbits = b_vector_orbits(orbit, sg_prim; atol)
 
     # Precompute what's needed for geometric factors (avoids recomputation per b-vector)
     gf_precomp = if D == 3
@@ -210,7 +260,8 @@ function frequency_shifts(
         polarization === :TE ? stack(Gs) : nothing   # Gm or nothing
     end
 
-    function _make_terms(c)
+    # Closure: scalar orbit-summed geometric factor for a single state c (M=1).
+    function _make_scalar_terms(c)
         terms = ShiftTerm{D}[]
         for (canonical_b, orbit_bs, phases) in b_orbits
             # Sum phase-weighted geometric factors over the orbit.
@@ -238,14 +289,53 @@ function frequency_shifts(
         return terms
     end
 
-    # Only include irreps that are present (multiplicity == 1) at this degeneracy
-    data = Vector{IrrepShiftExpr{D}}(undef, sum(irmults))
+    # Closure: M×M orbit-summed geometric factor matrix for multiplicity-M states cs (M>1).
+    # Same phase-weighting logic as _make_scalar_terms; here A is an M×M Hermitian matrix.
+    # Because b_orbits is computed with the full space group (which contains inversion or
+    # equivalent operations merging b and -b orbits), each orbit's A is guaranteed Hermitian.
+    function _make_matrix_terms(cs)
+        terms = MultipletShiftTerm{D}[]
+        for (canonical_b, orbit_bs, phases) in b_orbits
+            A = if D == 3
+                sum(zip(orbit_bs, phases)) do (b′, pf)
+                    conj(pf) * _geometric_factor_matrix_3d(cs, orbit, b′, gf_precomp; atol)
+                end
+            else
+                sum(zip(orbit_bs, phases)) do (b′, pf)
+                    conj(pf) * _geometric_factor_matrix_2d(cs, orbit, b′, gf_precomp, polarization; atol)
+                end
+            end
+            norm(A - A') > atol && error(
+                "geometric factor matrix is not Hermitian (norm of anti-Hermitian part = $(norm(A - A')))"
+            )
+            norm(A) > atol || continue  # skip symmetry-forbidden (zero) contributions
+            rels = OrbitRelations{D}(orbit_bs, phases)
+            push!(terms, MultipletShiftTerm{D}(canonical_b, rels, A))
+        end
+        return terms
+    end
+
+    # Build result: branch on multiplicity per irrep.
+    n_present = count(!iszero, irmults)
+    has_multiplet = any(m -> m > 1, irmults)
+    data = has_multiplet ?
+        Vector{AbstractShiftExpr{D}}(undef, n_present) :
+        Vector{IrrepShiftExpr{D}}(undef, n_present)
     idx = 1
     for (k, lgir) in enumerate(lgirs)
-        irmults[k] == 0 && continue
-        cs = symmetry_adapted_coefficients(lgir, Γs; seed_idx=1)
-        c = @view cs[:, 1]   # first partner function (all partners give equal shifts)
-        data[idx] = IrrepShiftExpr{D}(lgir, ω, polarization, _make_terms(c))
+        M = irmults[k]
+        M == 0 && continue
+        if M == 1
+            cs = symmetry_adapted_coefficients(lgir, Γs; seed_idx=1)
+            c  = @view cs[:, 1]
+            data[idx] = IrrepShiftExpr{D}(lgir, ω, polarization, _make_scalar_terms(c))
+        elseif M == 2
+            cs = multiplicity_adapted_coefficients(lgir, Γs, M; atol)
+            data[idx] = DoubletShiftExpr{D}(lgir, ω, polarization, _make_matrix_terms(cs))
+        else
+            cs = multiplicity_adapted_coefficients(lgir, Γs, M; atol)
+            data[idx] = MultipletShiftExpr{D}(lgir, ω, polarization, _make_matrix_terms(cs), M)
+        end
         idx += 1
     end
 
