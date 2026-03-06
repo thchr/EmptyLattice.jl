@@ -213,12 +213,22 @@ function frequency_shifts(
     function _make_terms(c)
         terms = ShiftTerm{D}[]
         for (canonical_b, orbit_bs, phases) in b_orbits
-            # sum geometric factors over the orbit; coefficient is real for physical
-            # (Hermitian) Δε since G_k pairs each b with a conjugate b' s.t. f_{b'}=f_b*.
+            # Sum phase-weighted geometric factors over the orbit.
+            # For a G-symmetric Δε, members of the same b-orbit satisfy
+            # Δε[b'] = exp(-2πi b'·w) Δε[b₀] (where g=(W|w) maps b₀ → b').
+            # The stored phases satisfy phases[i]*Δε[b_i] = Δε[canonical], i.e.,
+            # phases[i] = exp(+2πi b_i·w), so Δε[b_i] = conj(phases[i])*Δε[canonical].
+            # Hence the correct orbit-summed coefficient (to multiply Δε[canonical]) is:
+            #   A = Σ conj(phases[i]) * f_{b_i}
+            # For symmorphic groups all phases are 1 and this reduces to Σ f_{b'}.
             A = if D == 3
-                sum(b′ -> _geometric_factor_3d(c, orbit, b′, gf_precomp; atol), orbit_bs)
+                sum(zip(orbit_bs, phases)) do (b′, pf)
+                    conj(pf) * _geometric_factor_3d(c, orbit, b′, gf_precomp; atol)
+                end
             else
-                sum(b′ -> _geometric_factor_2d(c, orbit, b′, gf_precomp, polarization; atol), orbit_bs)
+                sum(zip(orbit_bs, phases)) do (b′, pf)
+                    conj(pf) * _geometric_factor_2d(c, orbit, b′, gf_precomp, polarization; atol)
+                end
             end
             abs(imag(A)) > atol && error("unexpectedly large imaginary part in geometric factor (= $A)")
             abs(real(A)) > atol || continue  # skip symmetry-forbidden (=zero) contributions

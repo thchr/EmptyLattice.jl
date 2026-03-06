@@ -233,10 +233,41 @@ polarizations), the projection formula produces more than one linearly independe
 per (α, n). The frequency shift is then a matrix within that degenerate subspace and must
 be diagonalized.
 
+**Theory basis**: see `latex/phase4-multiplicity-theory.tex` for the full brainstorm.
+Key structural results:
+
+1. **The perturbation matrix is M×M (not Md×Md)**. By the Wigner–Eckart theorem, since
+   Δε is G-invariant, the perturbation matrix between states |α,n,μ⟩ and |α,n',μ'⟩ is
+   `W^(α)_{μμ'} δ_{nn'}` — the same M×M matrix for every partner-function row n. So we
+   need only diagonalize an M×M Hermitian matrix, not the full Md×Md problem.
+
+2. **Only the n=1 projector is needed**. Apply P_{11}^(α) to M distinct seeds, then
+   Gram–Schmidt orthogonalize to get M orthonormal n=1 states. Partner functions for
+   n>1 can be recovered via the transfer projector P_{n1}^(α) if needed.
+
+3. **Off-diagonal geometric factors**. The matrix element W^(α)_{μμ'} is computed like
+   the existing geometric factor but with coefficient vectors c^(μ)* and c^(μ') for
+   different multiplicity copies μ, μ'.
+
+4. **M=2 → closed-form eigenvalues** (Tr ± discriminant, as in P̄1). **M≥3 → numerical
+   eigenvalues only** (Abel–Ruffini). The output type must change from scalar coefficient
+   to an M×M matrix per b-orbit.
+
+5. **P̄1 is the simplest case** (M=2, d=1). It is "easy" because the two 3D polarizations
+   are naturally orthogonal, making Gram–Schmidt trivial and the scalar-perturbation
+   matrix automatically diagonal. A general M=2, d≥2 case would require non-trivial GS.
+
+**Required output type changes**:
+- `ShiftTerm{D}`: `coefficient::Float64` → `coefficient::Matrix{Float64}` (M×M, real for
+  Hermitian Δε) or a new `MultipletShiftExpr` type hierarchy.
+- `IrrepShiftExpr{D}` / `evaluate`: return M eigenvalues per irrep instead of 1 scalar.
+- The M=1 case should remain backward-compatible (1×1 matrix = scalar).
+
 **Prerequisites before implementing**:
-- Extend `main.tex` to cover this case explicitly (theory note section on multi-copy
-  degeneracy, including Gram-Schmidt orthogonalization of the projected states)
-- Only then implement the diagonalization within the degenerate subspace
+- Finalize the theory presentation in `latex/phase4-multiplicity-theory.tex` and
+  incorporate into `main.tex`
+- Decide on API changes (extend existing types vs. new type hierarchy)
+- Only then implement
 
 This phase includes `test_Pbar1.jl` (space group P̄1, 3D).
 
