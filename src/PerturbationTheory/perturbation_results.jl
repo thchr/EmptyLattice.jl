@@ -361,10 +361,16 @@ function Base.show(io::IO, ::MIME"text/plain", es::Collection{<:AbstractShiftExp
     end
 end
 
+# Compact label for the collection inline display: bare irrep label for M=1,
+# "K₃+K₃" style for M=2, etc.
+_expr_label(e::IrrepShiftExpr)    = label(e.lgir)
+_expr_label(e::DoubletShiftExpr)  = (lbl = label(e.lgir); lbl * "+" * lbl)
+_expr_label(e::MultipletShiftExpr) = join(Iterators.repeated(label(e.lgir), e.M), "+")
+
 function Base.show(io::IO, es::Collection{<:AbstractShiftExpr{D}}) where D
     summary(io, es)
     print(io, "[")
-    join(io, (label(e.lgir) for e in es), ", ")
+    join(io, (_expr_label(e) for e in es), ", ")
     print(io, "]")
 end
 
