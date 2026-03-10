@@ -112,20 +112,20 @@ sep("(5) P4₁ (sgnum=76), A-point  [3D, M=4 MultipletShiftExpr]")
 
 D     = 3
 sgnum = 76
-Rs    = DirectBasis{3}(SVector(1.0,0.0,0.0), SVector(0.0,1.0,0.0), SVector(0.0,0.0,1.0))
+Rs    = DirectBasis{3}(SVector(1.0,0.0,0.0), SVector(0.0,1.0,0.0), SVector(0.0,0.0,0.8))
 Gs    = dualbasis(Rs)
 lgirs = lgirreps(sgnum, Val(D))["A"]
 
 es = frequency_shifts(lgirs, Gs, 1)
 for e in es
-    show(stdout, MIME"text/plain"(), e)
+    display(e)
     println()
 end
 
 bs = canonical_orbits(es)
-Δε = Dict(bs[1] => 0.3, bs[2] => 0.2, bs[3] => 0.1, bs[4] => 0.15)
-println("Eigenvalue spectra (Δε₁=0.3, Δε₂=0.2, Δε₃=0.1, Δε₄=0.15):")
+Δε = Dict(b => rand() for b in bs)
 result = evaluate(es, Δε)
+println("Evaluate (M=4, random Δεᵢ):")
 for e in es
     lbl = label(e.lgir)
     println("  $(label(e)): $(round.(result[lbl]; digits=6))")
