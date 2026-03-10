@@ -24,7 +24,7 @@ function _te_overlap(q_cart, q_plus_b_cart)
 end
 
 """
-    geometric_factor(c, kvGsv, b; Gs=nothing, polarization=:TM, atol=1e-10) -> ComplexF64
+    geometric_factor(c, kvGsv, b, Gs=nothing; polarization=:TM, atol=1e-10) -> ComplexF64
 
 Compute the geometric factor f_b for a reciprocal-lattice displacement vector `b`
 (in **fractional reciprocal coordinates**, same basis as `kvGsv`).
@@ -46,15 +46,15 @@ where `cᵢ = [c[2i-1], c[2i]]`, `evs[i]` is the 3×2 transverse frame at qᵢ, 
 - `c`: coefficient vector (column of `symmetry_adapted_coefficients` output)
 - `kvGsv`: orbit q-vectors in fractional reciprocal coordinates
 - `b`: displacement vector in fractional reciprocal coordinates
-- `Gs`: reciprocal basis (required for `:TE` and 3D; may be `nothing` for `:TM`)
+- `Gs`: reciprocal basis (required for `:TE` and 3D; may be `nothing` for `:TM` 2D)
 - `polarization`: `:TM`, `:TE` (2D), or `nothing` (3D)
 - `atol`: tolerance for matching `kvGsv[i] + b` to orbit points
 """
 function geometric_factor(
     c::AbstractVector{<:Number},
     kvGsv::AbstractVector{<:StaticVector{D}},
-    b;
-    Gs = nothing,
+    b,
+    Gs = nothing;
     polarization::Union{Symbol, Nothing} = :TM,
     atol::Real = 1e-10,
 ) where D
@@ -166,16 +166,16 @@ end
 
 """
     frequency_shifts(
-        lgirs,
+        lgirsAbstractVector{<:LGIrrep{D}},
+        Gs::ReciprocalBasis{D},
         [degeneracy_idx=1];
         polarization=nothing,
-        Gs=nothing,
         atol=1e-10
     ) -> Collection{IrrepShiftExpr{D}}
 
 High-level interface: compute symbolic first-order frequency-shift expressions for the
 irreps in `lgirs` that are featured at the `degeneracy_idx`-th unique frequency of the
-empty-lattice spectrum at the k-point encoded in `lgirs`.
+empty-lattice spectrum at the **k**-point encoded in `lgirs`.
 
 The featured irreps are determined via `planewave_symeigs` + `find_representation`.
 Irreps with multiplicity 0 are absent at this degeneracy and omitted from the result.
@@ -191,39 +191,40 @@ Internally:
 5. For each present irrep, computes the orbit-summed geometric factor
    `A_{α,[b]} = Σ_{b' ∈ orbit} f_{b'}` for each b-orbit.
 
-Returns a `Collection{IrrepShiftExpr{D}}` when all present irreps have multiplicity M=1,
-or a `Collection{AbstractShiftExpr{D}}` (containing `IrrepShiftExpr`, `DoubletShiftExpr`,
-and/or `MultipletShiftExpr` elements) when any irrep has M>1. Call [`evaluate`](@ref) on
-the result to obtain numerical shifts.
+Returns a `Collection{Union{IrrepShiftExpr{D}, DoubletShiftExpr{D}, MultipletShiftExpr{D}}`,
+whose element types depend on the multiplicity (M) of featured irreps
+(M=1: `IrrepShiftExpr`, M=2: `DoubletShiftExpr`, M≥3: `MultipletShiftExpr`).
+Call [`evaluate`](@ref) on the result to obtain numerical shifts for concrete values of
+the dielectric perturbation's Fourier components.
 
 # Arguments
-- `lgirs`: irreps at the k-point, e.g. `lgirreps(sgnum, Val(D))["M"]`
+- `lgirs`: primitive little group irreps at considered **k**-point, e.g.
+  `primitivize(lgirreps(sgnum, Val(D)))`
+- `Gs`: primitive reciprocal basis (from `dualbasis(primitivize(directbasis(...), cntr))`)
 - `degeneracy_idx`: index into the unique-frequency list (default 1 = lowest frequency)
 - `polarization`: `:TM`, `:TE`, or `nothing` (3D); required for D = 2
-- `Gs`: reciprocal basis; required for D = 2 (both polarizations) and D = 3
 - `atol`: tolerance for orbit matching
 
 # Example
 ```julia
-lgirs = lgirreps(10, Val(2))["M"]   # p4, M-point
-Gs    = dualbasis(primitivize(directbasis(10, Val(2)), centering(10, 2)))
-fse   = frequency_shifts(lgirs; polarization=:TM, Gs)
+sgnum = 10; D = 2
+cntr  = centering(sgnum, D)
+Gs    = dualbasis(primitivize(directbasis(sgnum, Val(D)), cntr))
+lgirs = primitivize.(lgirreps(sgnum, Val(D))["M"], cntr)
+fse   = frequency_shifts(lgirs, Gs; polarization=:TM)
 display(fse)
 evaluate(fse, Dict(SVector(1.0,0.0) => 0.3, SVector(1.0,1.0) => 0.2))
 ```
 """
 function frequency_shifts(
-    lgirs::AbstractVector,
+    lgirs::AbstractVector{<:LGIrrep{D}},
+    Gs::ReciprocalBasis{D},
     degeneracy_idx::Int = 1;
     polarization::Union{Symbol, Nothing} = nothing,
-    Gs = nothing,
     atol::Real = 1e-10,
-)
-    Gs === nothing && error("`Gs` must be supplied (reciprocal basis for the lattice)")
-
+) where D
     lg = group(lgirs[1])
     kv = position(lg)()
-    D  = length(kv)
     if D == 2 && polarization === nothing
         error("for D = 2, `polarization` must be specified as `:TM` or `:TE`")
     end
@@ -243,7 +244,7 @@ function frequency_shifts(
     orbit = kvGsv[degeneracy_idx]
 
     # Γ matrices and symmetry-adapted coefficients
-    Γs = gamma_matrices(orbit, lg; polarization, Gs, atol)
+    Γs = gamma_matrices(orbit, lg, Gs; polarization, atol)
 
     # Find symmetry orbits of b-vectors connecting orbit points.
     # Use the full space group (primitivized) rather than just the little group, so that
@@ -263,27 +264,30 @@ function frequency_shifts(
     # Closure: scalar orbit-summed geometric factor for a single state c (M=1).
     function _make_scalar_terms(c)
         terms = ShiftTerm{D}[]
-        for (canonical_b, orbit_bs, phases) in b_orbits
-            # Sum phase-weighted geometric factors over the orbit.
+        for (canonical_b, full_bs, full_phases, active, conjugate) in b_orbits
+            # Sum phase-weighted geometric factors over active (connecting) orbit members.
             # For a G-symmetric Δε, members of the same b-orbit satisfy
             # Δε[b'] = exp(-2πi b'·w) Δε[b₀] (where g=(W|w) maps b₀ → b').
-            # The stored phases satisfy phases[i]*Δε[b_i] = Δε[canonical], i.e.,
-            # phases[i] = exp(+2πi b_i·w), so Δε[b_i] = conj(phases[i])*Δε[canonical].
-            # Hence the correct orbit-summed coefficient (to multiply Δε[canonical]) is:
-            #   A = Σ conj(phases[i]) * f_{b_i}
+            # The stored phases satisfy phases[i]*Δε[b_i] = Δε[canonical] (for non-conjugate
+            # members) or phases[i]*Δε[b_i] = conj(Δε[canonical]) (for conjugate members).
+            # Assuming a real canonical Fourier component, in both cases
+            # Δε[b_i] = conj(phases[i])*Δε[canonical], so the orbit-summed coefficient is:
+            #   A = Σ_{active i} conj(phases[i]) * f_{b_i}
             # For symmorphic groups all phases are 1 and this reduces to Σ f_{b'}.
+            active_bs     = full_bs[active]
+            active_phases = full_phases[active]
             A = if D == 3
-                sum(zip(orbit_bs, phases)) do (b′, pf)
+                sum(zip(active_bs, active_phases)) do (b′, pf)
                     conj(pf) * _geometric_factor_3d(c, orbit, b′, gf_precomp; atol)
                 end
             else
-                sum(zip(orbit_bs, phases)) do (b′, pf)
+                sum(zip(active_bs, active_phases)) do (b′, pf)
                     conj(pf) * _geometric_factor_2d(c, orbit, b′, gf_precomp, polarization; atol)
                 end
             end
             abs(imag(A)) > atol && error("unexpectedly large imaginary part in geometric factor (= $A)")
             abs(real(A)) > atol || continue  # skip symmetry-forbidden (=zero) contributions
-            rels = OrbitRelations{D}(orbit_bs, phases)
+            rels = OrbitRelations{D}(full_bs, full_phases, active, conjugate)
             push!(terms, ShiftTerm{D}(canonical_b, rels, real(A)))
         end
         return terms
@@ -295,13 +299,15 @@ function frequency_shifts(
     # equivalent operations merging b and -b orbits), each orbit's A is guaranteed Hermitian.
     function _make_matrix_terms(cs)
         terms = MultipletShiftTerm{D}[]
-        for (canonical_b, orbit_bs, phases) in b_orbits
+        for (canonical_b, full_bs, full_phases, active, conjugate) in b_orbits
+            active_bs     = full_bs[active]
+            active_phases = full_phases[active]
             A = if D == 3
-                sum(zip(orbit_bs, phases)) do (b′, pf)
+                sum(zip(active_bs, active_phases)) do (b′, pf)
                     conj(pf) * _geometric_factor_matrix_3d(cs, orbit, b′, gf_precomp; atol)
                 end
             else
-                sum(zip(orbit_bs, phases)) do (b′, pf)
+                sum(zip(active_bs, active_phases)) do (b′, pf)
                     conj(pf) * _geometric_factor_matrix_2d(cs, orbit, b′, gf_precomp, polarization; atol)
                 end
             end
@@ -309,17 +315,17 @@ function frequency_shifts(
                 "geometric factor matrix is not Hermitian (norm of anti-Hermitian part = $(norm(A - A')))"
             )
             norm(A) > atol || continue  # skip symmetry-forbidden (zero) contributions
-            rels = OrbitRelations{D}(orbit_bs, phases)
+            rels = OrbitRelations{D}(full_bs, full_phases, active, conjugate)
             push!(terms, MultipletShiftTerm{D}(canonical_b, rels, A))
         end
         return terms
     end
 
     # Build result: branch on multiplicity per irrep.
-    n_present = count(!iszero, irmults)
-    has_multiplet = any(m -> m > 1, irmults)
+    n_present    = count(!iszero, irmults)
+    has_multiplet = any(m > 1 for m in irmults)
     data = has_multiplet ?
-        Vector{AbstractShiftExpr{D}}(undef, n_present) :
+        Vector{Union{IrrepShiftExpr{D}, DoubletShiftExpr{D}, MultipletShiftExpr{D}}}(undef, n_present) :
         Vector{IrrepShiftExpr{D}}(undef, n_present)
     idx = 1
     for (k, lgir) in enumerate(lgirs)
@@ -341,3 +347,42 @@ function frequency_shifts(
 
     return Collection(data)
 end
+
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+# Makie extension stubs (implemented in ext/EmptyLatticeMakieExt.jl)
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+
+"""
+    plot_dielectric(orbits, Δεs [, Gs_or_Rs]; npoints=101, ncontours=10, kwargs...) -> Figure
+
+Visualize the real-space dielectric perturbation
+```
+Δε(r) = Σ_k Δεs[k] · Σ_{b ∈ orbits[k].orbit} conj(coefs[b]) · exp(2πi b·r)
+```
+as a `contourf` plot over the 2D unit cell.
+
+# Arguments
+- `orbits::Vector{OrbitRelations{2}}`: orbit members and phase relations for each b-orbit
+- `Δεs::Vector{<:Real}`: canonical Fourier component Δε_k for each orbit
+- `Gs_or_Rs::Union{ReciprocalBasis{2}, DirectBasis{2}, Nothing} = nothing`:
+  lattice basis used to set the coordinate system.
+  - `nothing` → fractional direct-lattice coordinates on [-½,½]²
+  - `DirectBasis{2}` or `ReciprocalBasis{2}` → Cartesian coordinates; the unit cell
+    is shown as a parallelogram with NaN masking outside it
+
+# Keyword arguments
+- `npoints::Int = 101`: grid resolution (npoints × npoints)
+- `ncontours::Int = 10`: contour levels forwarded to `contourf`
+- remaining `kwargs` forwarded to `contourf!`
+
+Requires a Makie backend (e.g. `using GLMakie`) to be loaded.
+"""
+function plot_dielectric end
+
+"""
+    plot_dielectric!(ax, orbits, Δεs [, Gs_or_Rs]; npoints=101, ncontours=10, kwargs...)
+
+In-place version of [`plot_dielectric`](@ref): plots into an existing Makie `Axis` `ax`.
+Returns the `contourf` plot object.
+"""
+function plot_dielectric! end

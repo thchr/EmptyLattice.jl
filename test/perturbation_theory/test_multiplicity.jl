@@ -38,7 +38,7 @@ using EmptyLattice.PerturbationTheory
         Gs    = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["X"]
 
-        es = frequency_shifts(lgirs, 1; Gs)
+        es = frequency_shifts(lgirs, Gs, 1)
 
         # Return type should be Collection{AbstractShiftExpr{3}} (has M=2 elements)
         @test es isa Collection{<:AbstractShiftExpr{3}}
@@ -92,7 +92,7 @@ using EmptyLattice.PerturbationTheory
         Gs   = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["S"]
 
-        es = frequency_shifts(lgirs, 1; polarization=:TM, Gs)
+        es = frequency_shifts(lgirs, Gs, 1; polarization=:TM)
 
         # Single irrep S₁ with M=2
         @test es isa Collection{<:AbstractShiftExpr{2}}
@@ -133,7 +133,7 @@ using EmptyLattice.PerturbationTheory
         # because G_K = C₃v lacks C₂, splitting the b-orbit of b and -b.  The fix uses
         # the full space group (C₆v) for b_vector_orbits, which contains C₂ and merges
         # the sub-orbits.  If the fix is working this call must not error.
-        es = frequency_shifts(lgirs, 3; polarization=:TM, Gs)
+        es = frequency_shifts(lgirs, Gs, 3; polarization=:TM)
 
         @test es isa Collection{<:AbstractShiftExpr{2}}
 

@@ -85,41 +85,71 @@ Returns a `Matrix{ComplexF64}` of size `(norb, M)` where column `μ` is the `μ`
 multiplicity basis vector `|α, 1, μ⟩`.
 """
 function multiplicity_adapted_coefficients(
-    lgir,
+    lgir::LGIrrep,
     Γs::AbstractVector{<:AbstractMatrix},
     M::Int;
     atol::Real = 1e-12,
 )
-    Dmats = lgir()
-    norb  = size(first(Γs), 1)
-    nops  = length(Γs)
+    Ds = lgir()
+    n_orbit = size(first(Γs), 1)
 
-    cs      = zeros(ComplexF64, norb, M)
+    cs = Matrix{ComplexF64}(undef, n_orbit, M)
     n_found = 0
-
-    for seed_idx in 1:norb
-        n_found == M && break
+    v = Vector{ComplexF64}(undef, n_orbit)
+    for seed_idx in 1:n_orbit
         # Apply P_{11}^{(α)} to seed plane-wave `seed_idx`
-        v = zeros(ComplexF64, norb)
-        for k in 1:nops
-            v .+= conj(Dmats[k][1, 1]) .* Γs[k][:, seed_idx]
+        fill!(v, zero(ComplexF64))
+        for (D_g, Γ_g) in zip(Ds, Γs)
+            v .+= conj(D_g[1, 1]) .* @view Γ_g[:, seed_idx]
         end
         norm(v) < atol && continue  # seed projects to zero for this irrep
 
         # Gram–Schmidt: orthogonalize against existing basis vectors
-        for μ in 1:n_found
-            v .-= dot(cs[:, μ], v) .* cs[:, μ]
-        end
-        nrm = norm(v)
-        nrm < atol && continue  # linearly dependent on existing basis
+        linearly_independent, v = orthogonalize!(v, cs, n_found; atol)
+        linearly_independent || continue  # `v` is linearly dependent on existing basis
 
         n_found += 1
-        cs[:, n_found] .= v ./ nrm
+        cs[:, n_found] .= v
+        n_found == M && break
     end
 
-    n_found == M || error(
-        "multiplicity_adapted_coefficients: found only $n_found of $M independent " *
-        "projected vectors; check that `lgir` is correct and `M` matches the irrep multiplicity"
-    )
+    if n_found ≠ M
+        error("found only $n_found of $M independent projected vectors; check that" *
+              "`lgir` is correct and `M` matches the irrep multiplicity")
+    end
     return cs
+end
+
+"""
+    orthogonalize!(v, basis, ncols; atol=1e-12) --> Bool, typeof(v)
+
+Performs modified Gram-Schmidt of `v` against `basis`, mutating `v` in-place.
+
+Returns `(b, v)`, where `b` is a boolean indicating whether `v` is linearly independent of
+`basis[:, 1:ncols]`. If `b == true`, `v` is modified in-place to be a vector that is
+orthogonal (and normal) to all elements in `basis[:, 1:ncols]`. If `b == false`, `v` is a
+vector of approximately zero norm (or, more precisely, norm < `atol`).
+"""
+function orthogonalize!(
+    v::AbstractVector,
+    basis::AbstractMatrix,
+    ncols::Int=size(basis, 2);
+    atol=1e-12
+)
+    if size(v, 1) ≠ size(basis, 1)
+        error("incompatible vector and matrix dimensions")
+    end
+    size(basis, 2) < ncols && error(lazy"ncols=$ncols exceeds number of columns in basis ($(size(basis, 2)))")
+
+    # orthogonalize `v` against vectors in `basis[:, 1:ncols]`
+    for i in 1:ncols
+        nᵢ = @inbounds @view basis[:, i]
+        v .-= dot(nᵢ, v) .* nᵢ
+    end
+    v_norm = norm(v)
+    v_norm < atol && return false, v # `v` is linearly dependent on `basis[1:ncols]`
+    
+    # `v` is linearly independent (& now orthogonal to all elements) of `basis[1:ncols]`
+    v ./= v_norm
+    return true, v
 end

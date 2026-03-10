@@ -84,7 +84,7 @@ using EmptyLattice.PerturbationTheory
     hasnum(k, n) = endswith(k, string(n)) || endswith(k, string(Char(0x2080 + n)))
     factor = ω_M / 2  # ε = 1
 
-    es_TM   = frequency_shifts(lgirs_M, orbit_idx; polarization=:TM, Gs)
+    es_TM   = frequency_shifts(lgirs_M, Gs, orbit_idx; polarization=:TM)
     result_TM = evaluate(es_TM, Δε_fourier)
 
     getΔω(r, n) = only(v for (k, v) in r if hasnum(k, n))
@@ -98,7 +98,7 @@ using EmptyLattice.PerturbationTheory
     # Consequently Δε₁₀ drops out entirely and the Δε₁₁ contributions flip sign:
     #   Δω_TE_{M₁} = Δω_TE_{M₂} = +(ω_M/2ε) Δε₁₁
     #   Δω_TE_{M₃} = Δω_TE_{M₄} = -(ω_M/2ε) Δε₁₁
-    es_TE   = frequency_shifts(lgirs_M, orbit_idx; polarization=:TE, Gs)
+    es_TE   = frequency_shifts(lgirs_M, Gs, orbit_idx; polarization=:TE)
     result_TE = evaluate(es_TE, Δε_fourier)
 
     @test getΔω(result_TE, 1) ≈  factor * Δε₁₁  atol=1e-10

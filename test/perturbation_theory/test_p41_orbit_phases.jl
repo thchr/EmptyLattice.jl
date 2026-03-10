@@ -29,7 +29,6 @@ using EmptyLattice.PerturbationTheory   # also exports ReciprocalPoint
     Gs = dualbasis(Rs)
     lgirs = lgirreps(sgnum, Val(D))["A"]
     kv    = position(lgirs[1])()
-    lg    = group(lgirs[1])
 
     # ── b_vector_orbits phase computation ─────────────────────────────────────── #
     @testset "complex phases in b_vector_orbits" begin
@@ -37,22 +36,25 @@ using EmptyLattice.PerturbationTheory   # also exports ReciprocalPoint
         orbit = kvGsv[1]
         @test length(orbit) == 8   # all 8 corners of the BZ ±½ cube
 
-        b_orbits = b_vector_orbits(orbit, lg)
+        sg_prim  = primitivize(spacegroup(sgnum, Val(D)))
+        b_orbits = b_vector_orbits(orbit, sg_prim)
 
-        # Find the orbit whose canonical b-vector is [1,0,1] (or one that round-trips)
+        # P4₁ lacks inversion, so b and -b are merged by the -b pairing step.
+        # The [1,0,1] sg-orbit (4 members) is paired with [-1,0,-1] etc. (4 more),
+        # giving an 8-member orbit.  The canonical is [1,0,1] (positive, fewest negatives).
         idx = findfirst(b_orbits) do (cb, _, _)
             round.(Int, cb) == [1, 0, 1]
         end
         @test idx !== nothing
 
         (canonical_b, obs, phases) = b_orbits[idx]
-        @test length(obs) == 4
-        @test length(phases) == 4
+        @test length(obs) == 8
+        @test length(phases) == 8
 
         # canonical phase is 1
         @test phases[1] ≈ 1.0 + 0.0im  atol=1e-10
 
-        # Remaining phases should be -1, +i, -i (in some order among obs[2:4])
+        # Remaining phases should include -1, +i, -i (with multiplicity 2 each)
         # Use isapprox rather than Set membership to avoid isequal(-0.0, 0.0) = false.
         rest = phases[2:end]
         @test any(z -> isapprox(z, -1.0+0.0im; atol=1e-10), rest)

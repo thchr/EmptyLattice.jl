@@ -37,7 +37,7 @@ using EmptyLattice.PerturbationTheory
 
     # ── degeneracy_idx = 1 (ω = 0, pinned) ────────────────────────────────────────────── #
     @testset "degeneracy_idx=1 (ω=0, no shifts)" begin
-        es1 = frequency_shifts(lgirs_Γ, 1; polarization=:TM, Gs)
+        es1 = frequency_shifts(lgirs_Γ, Gs, 1; polarization=:TM)
 
         @test length(es1) == 1
         @test label(es1[1].lgir) == "Γ₁"
@@ -47,7 +47,7 @@ using EmptyLattice.PerturbationTheory
 
     # ── degeneracy_idx = 2 (ω ≈ 2/√3, 6-fold orbit, 4 irreps) ────────────────────────── #
     @testset "degeneracy_idx=2 (4 irreps, 3 b-orbits, regression)" begin
-        es2 = frequency_shifts(lgirs_Γ, 2; polarization=:TM, Gs)
+        es2 = frequency_shifts(lgirs_Γ, Gs, 2; polarization=:TM)
 
         @test length(es2) == 4
         @test Set(label(e.lgir) for e in es2) == Set(["Γ₁", "Γ₄", "Γ₅", "Γ₆"])
@@ -56,7 +56,7 @@ using EmptyLattice.PerturbationTheory
 
         # Regression: evaluate at fixed Δε values and check Δω against stored A coefficients.
         # A values (read from ShiftTerm.coefficient): Γ₁: (+2,+2,+1), Γ₄: (-2,+2,-1),
-        #   Γ₅: (-1,-1,+1), Γ₆: (+1,-1,-1)  for b-orbits [1,0], [1,1], [0,2] respectively.
+        #   Γ₅: (-1,-1,+1), Γ₆: (+1,-1,-1)  for b-orbits [1,0], [1,1], [2,0] respectively.
         ω2 = es2[1].ω
         eΓ₁ = only(e for e in es2 if label(e.lgir) == "Γ₁")
         canonical_bs = Dict(round.(Int, parent(t.canonical_b)) => t.canonical_b
@@ -65,7 +65,7 @@ using EmptyLattice.PerturbationTheory
         Δε_fourier = Dict(
             canonical_bs[[1, 0]] => Δε₁₀,
             canonical_bs[[1, 1]] => Δε₁₁,
-            canonical_bs[[0, 2]] => Δε₀₂,
+            canonical_bs[[2, 0]] => Δε₀₂,
         )
         result = evaluate(es2, Δε_fourier)
 

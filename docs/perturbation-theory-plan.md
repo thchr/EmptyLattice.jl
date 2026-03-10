@@ -225,7 +225,7 @@ only at the `b_vector_orbits` / `OrbitRelations` display level (`test_p41_orbit_
 
 ---
 
-## Phase 4: Multiple-Copy Irrep Degeneracy (future)
+## Phase 4: Multiple-Copy Irrep Degeneracy  ✓ COMPLETE
 
 When an orbit supports multiple copies of the same irrep (e.g., the P̄1 example from the
 note, where both even and odd subspaces carry each irrep twice due to the two transverse
@@ -233,7 +233,7 @@ polarizations), the projection formula produces more than one linearly independe
 per (α, n). The frequency shift is then a matrix within that degenerate subspace and must
 be diagonalized.
 
-**Theory basis**: see `latex/phase4-multiplicity-theory.tex` for the full brainstorm.
+**Theory basis**: `latex/repeated-irreps.tex` (incorporated in `main.tex`).
 Key structural results:
 
 1. **The perturbation matrix is M×M (not Md×Md)**. By the Wigner–Eckart theorem, since
@@ -242,36 +242,148 @@ Key structural results:
    need only diagonalize an M×M Hermitian matrix, not the full Md×Md problem.
 
 2. **Only the n=1 projector is needed**. Apply P_{11}^(α) to M distinct seeds, then
-   Gram–Schmidt orthogonalize to get M orthonormal n=1 states. Partner functions for
-   n>1 can be recovered via the transfer projector P_{n1}^(α) if needed.
+   Gram–Schmidt orthogonalize to get M orthonormal n=1 states.
 
 3. **Off-diagonal geometric factors**. The matrix element W^(α)_{μμ'} is computed like
    the existing geometric factor but with coefficient vectors c^(μ)* and c^(μ') for
-   different multiplicity copies μ, μ'.
+   different multiplicity copies μ, μ'. Coefficient matrices are **Hermitian** (not
+   necessarily real) due to non-symmorphic phases.
 
 4. **M=2 → closed-form eigenvalues** (Tr ± discriminant, as in P̄1). **M≥3 → numerical
-   eigenvalues only** (Abel–Ruffini). The output type must change from scalar coefficient
-   to an M×M matrix per b-orbit.
+   eigenvalues only** (Abel–Ruffini).
 
-5. **P̄1 is the simplest case** (M=2, d=1). It is "easy" because the two 3D polarizations
-   are naturally orthogonal, making Gram–Schmidt trivial and the scalar-perturbation
-   matrix automatically diagonal. A general M=2, d≥2 case would require non-trivial GS.
+### Implemented
 
-**Required output type changes**:
-- `ShiftTerm{D}`: `coefficient::Float64` → `coefficient::Matrix{Float64}` (M×M, real for
-  Hermitian Δε) or a new `MultipletShiftExpr` type hierarchy.
-- `IrrepShiftExpr{D}` / `evaluate`: return M eigenvalues per irrep instead of 1 scalar.
-- The M=1 case should remain backward-compatible (1×1 matrix = scalar).
+- `multiplicity_adapted_coefficients` in `coefficients.jl`: Gram–Schmidt over multiple
+  seeds to get M orthonormal n=1 states.
+- `_geometric_factor_matrix_2d/_3d` in `frequency_shifts.jl`: builds M×M Hermitian W.
+- New types in `perturbation_results.jl`:
+  - `abstract type AbstractShiftExpr{D}` — supertype for all shift expressions
+  - `MultipletShiftTerm{D}` — one b-orbit with `coefficient::Matrix{ComplexF64}` (M×M Hermitian)
+  - `DoubletShiftExpr{D} <: AbstractShiftExpr{D}` — M=2, analytical eigenvalues
+  - `MultipletShiftExpr{D} <: AbstractShiftExpr{D}` — M>2, numerical `eigvals(Hermitian(W))`
+- `doublet_eigenvalues.jl`: symbolic 2×2 display with cases `{c₋Δε, c₊Δε}`, `±|S|`,
+  `±√D/2`, `(L ± √D)/2` depending on which coefficient categories vanish; unit-phase
+  formatting `exp(2πi·p/q)·` for unit-norm complex coefficients.
+- `frequency_shifts` branches on M per irrep; label format `S₁+S₁` for doublets.
+- Full-space-group orbit fix: `b_vector_orbits` called with `primitivize(spacegroup(...))`
+  so that Δε-orbits are determined by full crystal symmetry (not just G_k).
+- `evaluate(::Collection{<:AbstractShiftExpr})` returns `Dict{String, Vector{Float64}}`.
 
-**Prerequisites before implementing**:
-- Finalize the theory presentation in `latex/phase4-multiplicity-theory.tex` and
-  incorporate into `main.tex`
-- Decide on API changes (extend existing types vs. new type hierarchy)
-- Only then implement
+Tests: `test_multiplicity.jl` — P̄1 (sg=2, 3D) X-point (M=2 doublets, W ∝ ±I);
+p2mg (sg=7) S-point (Tr(W)=0).
 
-This phase includes `test_Pbar1.jl` (space group P̄1, 3D).
+---
 
-## Phase 5: Tensor Perturbations (future)
+## Phase 5: Quality-of-Life / Maintenance (in progress)
+
+API cleanup already done:
+- `Gs` promoted to positional arg in `frequency_shifts` (2nd), `gamma_matrices` (3rd),
+  `geometric_factor` (4th).
+- `primitivize(lgirreps(...)["M"])` canonical form.
+- `b_vector_orbits` local vars consistently named `active`/`conjugate` (matching struct
+  fields); canonical always has `conjugate=false` (flip logic added).
+
+### 5a: Known limitation — complex canonical Δε  [TODO: decide & fix]
+
+`evaluate` silently gives wrong results when `Δε[canonical]` is complex AND the orbit
+contains `conjugate=true` members. The formula `A * Δε[canonical]` is correct only for
+real canonical. For a complex canonical, conjugate members satisfy
+`Δε[b] = conj(Δε[canonical]) / coef`, so their contribution should weight by
+`conj(Δε[canonical])`, not `Δε[canonical]`.
+
+**Root cause**: the orbit-summed geometric factor `A` is computed as
+`Σ_{active i} conj(phase[i]) * f_{b_i}`, accumulating non-conjugate and conjugate active
+members with the same `Δε[canonical]` weight. This is correct only when `Δε[canonical]`
+is real (then `conj(Δε[canonical]) = Δε[canonical]`).
+
+**Options**:
+- (a) Input validation in `evaluate`: if any orbit has a `conjugate=true` active member
+  and `Δε[canonical]` is not real, throw an informative error.
+- (b) Formula extension: split the active sum into conjugate and non-conjugate parts,
+  weighting the conjugate part by `conj(Δε[canonical])` separately.
+
+Decision deferred. For now documented here as a known limitation. Option (a) is a safe
+minimal fix; option (b) requires splitting the A accumulation in `_make_scalar_terms` /
+`_make_matrix_terms`.
+
+### 5b: Test — M=2 at non-TRIM k-point with conjugate orbit members  [TODO]
+
+**Target**: p3 (plane group sg=13, 2D) at the K-point with TM polarization.
+
+**Why p3, not p6 or p6mm**:  The key is whether the full space group contains an
+operation mapping **b** → **-b** (the 2D analogue of inversion: a C₂ rotation).  p6
+(sg=16) has point group C₆, which contains C₂ (since C₆³ = C₂); so `b_vector_orbits`
+always merges **b** and **-b** into the same orbit — no conjugate members.  p6mm (sg=17)
+likewise.  p3 has point group C₃ = {E, C₃, C₃²}, which does NOT contain C₂.
+Consequently **-b** is absent from the sg-orbit, and reality closure adds it as a
+`conjugate=true` member.
+
+**Why K-point**: the little group G_K of p3 at K is C₃.  Its three 1D irreps are A,
+¹E, ²E (with ¹E = conj(²E)).  Under time-reversal the pair ¹E + ²E constitutes a
+degenerate doublet → multiplicity M=2, giving `DoubletShiftExpr`.  K is non-TRIM
+(K ≢ −K mod G for the hexagonal lattice).
+
+**Test content** (analogous to `test_multiplicity.jl`):
+- `frequency_shifts(lgirs_K, Gs, degeneracy_idx; polarization=:TM)` returns a collection
+  with one `IrrepShiftExpr` (A irrep, M=1) and one `DoubletShiftExpr` (¹E+²E, M=2).
+- At least one orbit in the `DoubletShiftExpr` has a member with `conjugate=true`,
+  confirming that reality closure was invoked.
+- `evaluate` with a concrete Δε dict returns the expected doublet eigenvalues.
+- Regression: pin the coefficient matrix for the doublet.
+
+**Verification step**: before writing the test, run exploratory Julia to confirm the
+correct `degeneracy_idx`, the orbit structure, and the coefficient matrix values.
+
+### 5c: MultipletShiftExpr display for M≥3  [TODO]
+
+#### Finding a suitable example
+
+Primary candidate: **P4₁ (sg=76, 3D) at the A-point**.  The existing plan (Phase 3
+TODO section) notes that at A all irreps have M=4 (orbit × 2 polarizations = 16D,
+four 1D little-group irreps).  Before Phase 4 this caused an error; after Phase 4 it
+should produce `MultipletShiftExpr` with M=4.  Verify this runs, then use it as the
+display test case.
+
+Secondary candidate: **p3 (sg=13, 2D) at K-point, higher degeneracy_idx**.  At a
+degeneracy where the orbit under C₃ has ≥ 9 vectors, the A irrep will have M ≥ 3.
+Use exploratory Julia to find the smallest such degeneracy_idx.
+
+Exploration step: for each candidate, run `frequency_shifts` and check that
+`MultipletShiftExpr` is returned and `evaluate` produces a `Vector{Float64}` of length M.
+
+#### Display format
+
+Current (bad): show method dumps raw `coefficient` matrix fields.
+
+New format for `Base.show(io, ::MultipletShiftExpr)`:
+
+```
+[label] (M=3, ω = 0.XXXX, TM):
+  Δω/Δε = A₁·Δε[b₁] + A₂·Δε[b₂] + ...
+  matrices:
+    A₁ (b = [i, j, k]):
+      ⎡  a  b  c ⎤
+      ⎢  d  e  f ⎥
+      ⎣  g  h  i ⎦
+    A₂ (b = [l, m, n]):
+      ...
+```
+
+Rules:
+- Subscript-indexed Aᵢ labels, one per `MultipletShiftTerm`
+- Matrix entries formatted with `_phase_prefix`-style display for complex values; real
+  entries printed to a fixed number of significant figures
+- Inactive orbit members shown dimmed (color :light_red), conjugate members marked with †, as in
+  the existing `_print_orbit_chain` — the b-label in `(b = [...])` always shows the
+  canonical
+
+Implementation: update `Base.show(io::IO, ::MIME"text/plain", e::MultipletShiftExpr)`
+in `perturbation_results.jl`.
+
+---
+
+## Phase 6: Tensor Perturbations (deferred)
 
 Perturbations of the form Δμ (off-diagonal permeability, TR-breaking) and tensorial Δε
 (gyrotropic form). These modify the perturbation matrix element to include cross-product

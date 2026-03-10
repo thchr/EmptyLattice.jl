@@ -43,17 +43,14 @@ end
         Gs = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["S"]
         kv    = position(lgirs[1])()
-        lg    = group(lgirs[1])
 
         _, kvGsv = unique_spectrum(kv, Gs; Nfreq=1)
         orbit = kvGsv[1]
 
-        # Use the little group directly here: this is a unit test of b_vector_orbits
-        # phase computation.  In frequency_shifts, the full space group is used instead
-        # (to correctly merge b ↔ -b orbits at non-TRIM k-points).
-        b_orbits = b_vector_orbits(orbit, lg)
+        sg_prim  = primitivize(spacegroup(sgnum, Val(D)))
+        b_orbits = b_vector_orbits(orbit, sg_prim)
 
-        # Find the orbit with canonical [1,1]
+        # Canonical: fewest negatives → [1,1] (positive components, fewest negatives)
         idx = find_b_orbit(b_orbits, [1, 1])
         @test idx !== nothing
 
@@ -63,12 +60,12 @@ end
 
         pd = phases_dict(orbit_bs, phases)
 
-        # Reference from levelsetlattice:
-        # [1,1] → 1  (canonical, by definition)
+        # Reference from levelsetlattice (phases relative to canonical [1,1]):
+        # [1,1] → +1  (canonical, by definition)
         @test isapprox(pd[[1,  1]], +1.0; atol=1e-10)
-        # [-1,-1] → +1
+        # [-1,-1] → +1   (related by inversion: same phase as canonical)
         @test isapprox(pd[[-1,-1]], +1.0; atol=1e-10)
-        # [-1, 1] → -1   (glide reflection along x maps b→ glide-related b with phase -1)
+        # [-1, 1] → -1   (glide reflection contributes phase -1)
         @test isapprox(pd[[-1, 1]], -1.0; atol=1e-10)
         # [1, -1] → -1
         @test isapprox(pd[[ 1,-1]], -1.0; atol=1e-10)
@@ -81,7 +78,6 @@ end
         Gs = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["M"]
         kv    = position(lgirs[1])()
-        lg    = group(lgirs[1])
 
         _, kvGsv = unique_spectrum(kv, Gs; Nfreq=2)
 
@@ -91,11 +87,12 @@ end
         orbit = kvGsv[orbit_idx]
         @test length(orbit) == 8
 
-        # Little group used directly (unit test of phase computation).
-        b_orbits = b_vector_orbits(orbit, lg)
+        sg_prim  = primitivize(spacegroup(sgnum, Val(D)))
+        b_orbits = b_vector_orbits(orbit, sg_prim)
 
-        # Find the orbit with canonical [2,1]
-        idx = find_b_orbit(b_orbits, [2, 1])
+        # Canonical: fewest negatives > fewest nonzeros > positive-first per component.
+        # [1,2] beats [2,1] because first component key (1,1) < (1,2).
+        idx = find_b_orbit(b_orbits, [1, 2])
         @test idx !== nothing
 
         (canonical_b, orbit_bs, phases) = b_orbits[idx]
@@ -104,15 +101,15 @@ end
 
         pd = phases_dict(orbit_bs, phases)
 
-        # Reference from levelsetlattice:
-        # [[-2,-1](1), [-2,1](-1), [-1,-2](-1), [-1,2](1), [1,-2](1), [1,2](-1), [2,-1](-1), [2,1](1)]
-        @test isapprox(pd[[ 2,  1]], +1.0; atol=1e-10)
-        @test isapprox(pd[[-2, -1]], +1.0; atol=1e-10)
-        @test isapprox(pd[[-1,  2]], +1.0; atol=1e-10)
-        @test isapprox(pd[[ 1, -2]], +1.0; atol=1e-10)
-        @test isapprox(pd[[-2,  1]], -1.0; atol=1e-10)
-        @test isapprox(pd[[ 2, -1]], -1.0; atol=1e-10)
-        @test isapprox(pd[[-1, -2]], -1.0; atol=1e-10)
-        @test isapprox(pd[[ 1,  2]], -1.0; atol=1e-10)
+        # Phases relative to canonical [1,2] (all flipped vs. old canonical [-2,-1]):
+        # [1,2](+1), [2,1](-1), [1,-2](-1), [2,-1](+1), [-1,2](-1), [-2,1](+1), [-1,-2](+1), [-2,-1](-1)
+        @test isapprox(pd[[ 1,  2]], +1.0; atol=1e-10)  # canonical
+        @test isapprox(pd[[ 2, -1]], +1.0; atol=1e-10)
+        @test isapprox(pd[[-2,  1]], +1.0; atol=1e-10)
+        @test isapprox(pd[[-1, -2]], +1.0; atol=1e-10)
+        @test isapprox(pd[[ 2,  1]], -1.0; atol=1e-10)
+        @test isapprox(pd[[ 1, -2]], -1.0; atol=1e-10)
+        @test isapprox(pd[[-1,  2]], -1.0; atol=1e-10)
+        @test isapprox(pd[[-2, -1]], -1.0; atol=1e-10)
     end
 end

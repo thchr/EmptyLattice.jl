@@ -104,24 +104,24 @@ function _show_doublet_1term(io::IO, term::MultipletShiftTerm)
     b_str = join(round.(Int, parent(term.canonical_b)), ",")
 
     printstyled(io, "-(ω/2ε)"; color=:light_black)
-    printstyled(io, "·{"; color=:blue, bold=true)
+    printstyled(io, "·{"; color=:light_blue, bold=true)
     for (k, λ) in enumerate(λs)
-        k > 1 && printstyled(io, ", "; color=:blue, bold=true)
+        k > 1 && printstyled(io, ", "; color=:light_blue, bold=true)
         c = round(λ; digits=8)
         if isone(c)
             nothing                   # just "Δε[b]"
         elseif isone(-c)
-            printstyled(io, "-"; color=:blue, bold=true)
+            printstyled(io, "-"; color=:light_blue, bold=true)
         elseif isinteger(c)
-            printstyled(io, string(Int(round(Int, c))); color=:blue, bold=true)
+            printstyled(io, string(Int(round(Int, c))); color=:light_blue, bold=true)
             printstyled(io, "·"; color=:light_black)
         else
-            printstyled(io, string(round(c; digits=6)); color=:blue, bold=true)
+            printstyled(io, string(round(c; digits=6)); color=:light_blue, bold=true)
             printstyled(io, "·"; color=:light_black)
         end
-        printstyled(io, "Δε[$b_str]"; color=:blue, bold=true)
+        printstyled(io, "Δε[$b_str]"; color=:light_blue, bold=true)
     end
-    printstyled(io, "}"; color=:blue, bold=true)
+    printstyled(io, "}"; color=:light_blue, bold=true)
 end
 
 # Compact show for multi-orbit doublet: display (L ± √D)/2 formula (with simplifications).
@@ -134,20 +134,20 @@ function _show_doublet_nterms(io::IO, terms::AbstractVector{<:MultipletShiftTerm
     if all_tr_zero && all_d_zero && !all_c_zero
         # D = 4|S|² → √D/2 = |S|: Δω ∈ ±(ω/2ε)·|S|
         printstyled(io, "±(ω/2ε)"; color=:light_black)
-        printstyled(io, " |"; color=:blue, bold=true)
+        printstyled(io, " |"; color=:light_blue, bold=true)
         _print_linform(io, c_coefs, terms)
-        printstyled(io, "|"; color=:blue, bold=true)
+        printstyled(io, "|"; color=:light_blue, bold=true)
     elseif all_tr_zero && all_d_zero
         # all zero — shouldn't normally happen since zero-norm terms are filtered
         printstyled(io, "{0, 0} (vanishing)"; color=:light_black)
     elseif all_tr_zero
         # L=0: Δω ∈ ±(ω/2ε)·√D/2 (D spelled out in text/plain)
         printstyled(io, "±(ω/2ε)"; color=:light_black)
-        printstyled(io, " √D/2"; color=:blue, bold=true)
+        printstyled(io, " √D/2"; color=:light_blue, bold=true)
     else
         # General: Δω ∈ -(ω/2ε)·(L ± √D)/2
         printstyled(io, "-(ω/2ε)"; color=:light_black)
-        printstyled(io, " (L ± √D)/2"; color=:blue, bold=true)
+        printstyled(io, " (L ± √D)/2"; color=:light_blue, bold=true)
     end
 end
 
@@ -156,39 +156,39 @@ function _print_doublet_disc_annotation(io::IO, terms, tr_coefs, d_coefs, c_coef
     all_tr_zero = all(x -> abs(x) < _DATOL, tr_coefs)
     all_d_zero  = all(x -> abs(x) < _DATOL, d_coefs)
     all_c_zero  = all(x -> abs(x) < _DATOL, c_coefs)
-    nl = "\n    "   # newline + indent
+    nl = "\n  "   # newline + indent
 
     if !all_tr_zero
-        printstyled(io, nl, "L"; color=:blue)
+        printstyled(io, nl, "L"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         _print_linform(io, tr_coefs, terms)
     end
 
     if !all_d_zero && !all_c_zero
         # D = T² + 4|S|²
-        printstyled(io, nl, "T"; color=:blue)
+        printstyled(io, nl, "T"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         _print_linform(io, d_coefs, terms)
-        printstyled(io, nl, "S"; color=:blue)
+        printstyled(io, nl, "S"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         _print_linform(io, c_coefs, terms)
-        printstyled(io, nl, "D"; color=:blue)
+        printstyled(io, nl, "D"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         printstyled(io, "T² + 4|S|²"; color=:normal)
     elseif !all_d_zero
         # all cₖ = 0: D = T²  →  √D = |T|
-        printstyled(io, nl, "T"; color=:blue)
+        printstyled(io, nl, "T"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         _print_linform(io, d_coefs, terms)
-        printstyled(io, nl, "D"; color=:blue)
+        printstyled(io, nl, "D"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         printstyled(io, "T²"; color=:normal)
     elseif !all_c_zero && !all_tr_zero
         # all dₖ = 0 but trₖ ≠ 0: D = 4|S|²  →  √D = 2|S|
-        printstyled(io, nl, "S"; color=:blue)
+        printstyled(io, nl, "S"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         _print_linform(io, c_coefs, terms)
-        printstyled(io, nl, "D"; color=:blue)
+        printstyled(io, nl, "D"; color=:light_blue)
         printstyled(io, " = "; color=:light_black)
         printstyled(io, "4|S|²"; color=:normal)
     end
@@ -220,19 +220,12 @@ function Base.show(io::IO, ::MIME"text/plain", e::DoubletShiftExpr)
 
     if length(e.terms) == 1
         # just show the orbit chain for the single b-orbit
-        printstyled(io, "\n    orbit: "; color=:blue)
-        _print_orbit_chain(io, e.terms[1].orbit_relations; color=:light_black)
+        printstyled(io, "\n  orbit: "; color=:light_blue)
     else
         # show definitions of L, T, S as needed, then orbit chains
         tr_coefs, d_coefs, c_coefs = _doublet_coefs(e.terms)
         _print_doublet_disc_annotation(io, e.terms, tr_coefs, d_coefs, c_coefs)
-
-        header = "\n    orbits: "
-        indent = "\n" * " "^(length(header)-1)
-        for (i, t) in enumerate(e.terms)
-            i == 1 ? printstyled(io, header; color=:blue) : print(io, indent)
-            _print_orbit_chain(io, t.orbit_relations; color=:light_black)
-        end
     end
+    _print_orbits(io, e)
     return nothing
 end

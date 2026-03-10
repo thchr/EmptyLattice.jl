@@ -10,8 +10,8 @@
 # All expression types are subtypes of AbstractShiftExpr{D}.
 #
 # The high-level workflow is:
-#   es = frequency_shifts(lgirs; polarization, Gs)   → Collection{IrrepShiftExpr} (M=1 only)
-#                                                       or Collection{AbstractShiftExpr} (any M>1)
+#   es = frequency_shifts(lgirs, Gs, idx; polarization) → Collection{IrrepShiftExpr} (M=1 only)
+#                                                          or Collection{AbstractShiftExpr} (any M>1)
 #   Δωs  = evaluate(es, Δε_fourier; ε)               → Dict{String, Float64}   (M=1 collection)
 #                                                       or Dict{String, Vector{Float64}} (M>1)
 
@@ -29,8 +29,24 @@ All concrete subtypes store a `.lgir::LGIrrep{D}` field.
 """
 abstract type AbstractShiftExpr{D} end
 
-Crystalline.dim(e::AbstractShiftExpr) = dim(e.lgir)
+Crystalline.dim(::AbstractShiftExpr{D}) where D = D
 Crystalline.num(e::AbstractShiftExpr) = num(e.lgir)
+
+Crystalline.position(e::AbstractShiftExpr) = position(e.lgir)
+Crystalline.group(e::AbstractShiftExpr) = group(e.lgir)
+
+# ──────────────────────────────────────────────────────────────────────────────────────── #
+
+"""
+    canonical_orbits(es::AbstractShiftExpr{D})
+    canonical_orbits(es::Collection{<:AbstractShiftExpr{D}})
+    -> Vector{ReciprocalPoint{D}}
+
+Extract the unique canonical b-vectors (i.e., `.canonical_b` fields) associated with each
+shift term in a single `AbstractShiftExpr` or a collection of shift expressions.
+"""
+canonical_orbits(e::AbstractShiftExpr) = [term.canonical_b for term in e.terms]
+canonical_orbits(es::Collection) = unique(reduce(vcat, (canonical_orbits(e) for e in es)))
 
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 # Shared orbit type
@@ -39,30 +55,50 @@ Crystalline.num(e::AbstractShiftExpr) = num(e.lgir)
 """
     OrbitRelations{D}
 
-Stores the symmetry orbit of a b-vector and the phase relations between the Fourier
-components of a symmetry-invariant scalar perturbation Δε at all orbit members.
+Stores the full symmetry orbit of a b-vector and the relations between the Fourier
+components of a real-valued scalar perturbation Δε at all orbit members.
 
-For a perturbation invariant under the little group G_k, `coefs[i]` satisfies:
-```
-coefs[i] · Δε[orbit[i]] = coefs[j] · Δε[orbit[j]]   for all i, j
-```
-i.e. all orbit members contribute identically when weighted by `coefs`.  With `orbit[1]` as
-the canonical b-vector and `coefs[1] = 1`, this means:
-```
-coefs[i] · Δε[orbit[i]] = Δε[orbit[1]]
-```
-where `coefs[i] = exp(+2πi orbit[i] · w)` for the operation g = (W,w) mapping
-`orbit[1]` to `orbit[i]`.  For symmorphic space groups (all `w = 0`), all
-`coefs[i] = 1` and all orbit members carry the same Fourier component.
+The orbit is the **complete** orbit under sg × {±1} (space-group orbit plus -b reality
+closure).  Two masks distinguish member types:
+
+- **`active`**: `orbit[i]` is a connecting vector `qⱼ - qᵢ`; only active members enter the
+  frequency-shift formula.  Inactive members complete the orbit for consistent
+  canonicalization and for correct Δε(r) reconstruction (plotting).
+
+- **`conjugate`**: `orbit[i]` entered the orbit via the -b reality-closure step (not via the
+  space-group BFS).  For non-conjugate members the relation to the canonical is a phase:
+  `coefs[i] · Δε[orbit[i]] = Δε[canonical]`.  For conjugate members the true relation is a
+  conjugation: `coefs[i] · Δε[orbit[i]] = conj(Δε[canonical])`, which reduces to the same
+  phase relation only when `Δε[canonical]` is real.  `evaluate` and the coefficient
+  formulae in `frequency_shifts` assume a **real** canonical Fourier component.
+
+The space-group phase relation (non-conjugate members): for g = (W,w) mapping canonical
+to `orbit[i]`, `coefs[i] = exp(+2πi orbit[i] · w)`.  For symmorphic groups all `coefs = 1`.
 
 # Fields
-- `orbit::Vector{ReciprocalPoint{D}}`: orbit members; `orbit[1]` is the canonical b-vector
+- `orbit::Vector{ReciprocalPoint{D}}`: full orbit members, lex-sorted; `orbit[1]` is the
+  canonical b-vector (lexicographically smallest overall, active or not)
 - `coefs::Vector{ComplexF64}`: weight coefficients; `coefs[1] = 1.0`
+- `active::Vector{Bool}`: `active[i] = true` iff `orbit[i]` is a connecting vector `qⱼ - qᵢ`
+- `conjugate::Vector{Bool}`: `conjugate[i] = true` iff `orbit[i]` entered via -b reality
+  closure (relation to canonical is conjugation, not a pure phase)
 """
 struct OrbitRelations{D}
-    orbit :: Vector{ReciprocalPoint{D}}
-    coefs :: Vector{ComplexF64}
+    orbit     :: Vector{ReciprocalPoint{D}}
+    coefs     :: Vector{ComplexF64}
+    active    :: Vector{Bool}
+    conjugate :: Vector{Bool}
 end
+
+# Convenience constructors for backward compatibility.
+OrbitRelations{D}(orbit::Vector{ReciprocalPoint{D}}, coefs::Vector{ComplexF64}) where D =
+    OrbitRelations{D}(orbit, coefs, fill(true, length(orbit)), fill(false, length(orbit)))
+
+OrbitRelations{D}(
+    orbit  :: Vector{ReciprocalPoint{D}},
+    coefs  :: Vector{ComplexF64},
+    active :: Vector{Bool},
+) where D = OrbitRelations{D}(orbit, coefs, active, fill(false, length(orbit)))
 
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 # M = 1 types: ShiftTerm and IrrepShiftExpr
@@ -126,6 +162,40 @@ function _b_label(b::ReciprocalPoint)
     return "[" * join(b_int, ",") * "]"
 end
 
+# Subscript digit string for non-negative integer n (e.g. 3 → "₃", 12 → "₁₂").
+const _SUBSCRIPT_CHARS = ('₀','₁','₂','₃','₄','₅','₆','₇','₈','₉')
+function _subscript(n::Int)
+    n < 0  && return "₋" * _subscript(-n)
+    n < 10 && return string(_SUBSCRIPT_CHARS[n + 1])
+    return _subscript(div(n, 10)) * string(_SUBSCRIPT_CHARS[mod(n, 10) + 1])
+end
+
+# Format a single complex number for inline matrix display.
+# Handles: zero, integer, pure real, pure imaginary, general complex.
+# sigdigits controls rounding precision for non-integer values.
+function _format_cnum(z::ComplexF64; atol::Real=1e-8, sigdigits::Int=5)
+    re, im = real(z), imag(z)
+    function _fmt(x::Float64)
+        xi = round(x)
+        isapprox(x, xi; atol=1e-8) && return string(round(Int, xi))
+        return string(round(x; sigdigits))
+    end
+    abs(z) < atol && return "0"
+    re_zero = abs(re) < atol
+    im_zero = abs(im) < atol
+    re_zero && return _fmt(im) * "i"
+    im_zero && return _fmt(re)
+    im_str = im < 0 ? "-" * _fmt(-im) * "i" : "+" * _fmt(im) * "i"
+    return _fmt(re) * im_str
+end
+
+# Format a matrix as a compact inline string "[a₁₁ a₁₂ ...; a₂₁ ...]".
+function _format_matrix_inline(A::AbstractMatrix; atol::Real=1e-8, sigdigits::Int=5)
+    rows = [join((_format_cnum(ComplexF64(A[i,j]); atol, sigdigits) for j in axes(A, 2)), " ")
+            for i in axes(A, 1)]
+    return "[" * join(rows, "; ") * "]"
+end
+
 # Format a weight coefficient z as a prefix string to appear before "Δε[b]" in the orbit
 # chain "Δε[canonical] = prefix·Δε[b]":
 #   z ≈  1   →  ""          (just equality)
@@ -145,14 +215,33 @@ function _phase_prefix(z::ComplexF64)
 end
 
 # Print the orbit of `rels` as a chain of equalities on a single line.
+#
+# Visual conventions:
+#   - Canonical (i=1): always plain "Δε[b]", bold; it is the reference treated as real
+#   - Active non-conjugate: caller's styling, plain "Δε[b]"
+#   - Active conjugate: caller's styling, "Δε†[b]" with prefix from conj(coef)
+#   - Inactive: :light_red color; "Δε†" if conjugate, "Δε" otherwise
+#
+# For conjugate members the displayed relation is  conj(coef) · Δε†[b] = Δε[canonical],
+# valid when Δε[canonical] is real (the assumption throughout `evaluate`).
 function _print_orbit_chain(io::IO, rels::OrbitRelations; styling_kws...)
-    for (i, (b, c)) in enumerate(zip(rels.orbit, rels.coefs))
+    for (i, (b, c, active, conj_rel)) in
+            enumerate(zip(rels.orbit, rels.coefs, rels.active, rels.conjugate))
         i ≠ 1 && printstyled(io, " = "; styling_kws...)
-        pfx = _phase_prefix(c)
         if i == 1
-            printstyled(io, "Δε", _b_label(b); styling_kws..., bold=true, color=:normal)
+            # Canonical: always plain Δε, coef=1 so prefix is empty; bold to stand out
+            kws = active ? (styling_kws..., bold=true, color=:normal) : (color=:light_red, bold=true)
+            printstyled(io, "Δε", _b_label(b); kws...)
+        elseif conj_rel
+            # Conjugate (reality-closure) member: relation is conj(c) · Δε†[b] = Δε[canonical]
+            pfx = _phase_prefix(conj(c))
+            kws = active ? styling_kws : (color=:light_red,)
+            printstyled(io, pfx, "Δε†", _b_label(b); kws...)
         else
-            printstyled(io, pfx, "Δε", _b_label(b); styling_kws...)
+            # Plain phase relation: c · Δε[b] = Δε[canonical]
+            pfx = _phase_prefix(c)
+            kws = active ? styling_kws : (color=:light_red,)
+            printstyled(io, pfx, "Δε", _b_label(b); kws...)
         end
     end
 end
@@ -199,17 +288,17 @@ function Base.show(io::IO, e::IrrepShiftExpr)
         return nothing
     end
     printstyled(io, "-(ω/2ε)", color=:light_black)
-    printstyled(io, " ("; color=:blue, bold=true)
+    printstyled(io, " ("; color=:light_blue, bold=true)
     for (k, t) in enumerate(e.terms)
         if k > 1
             peek_sign = signbit(t.coefficient) ? "-" : "+"
-            printstyled(io, " $peek_sign "; color=:blue, bold=true)
+            printstyled(io, " $peek_sign "; color=:light_blue, bold=true)
             _show(io, t, omit_sign=true)
         else
             _show(io, t, omit_sign=false)
         end
     end
-    printstyled(io, ")"; color=:blue, bold=true)
+    printstyled(io, ")"; color=:light_blue, bold=true)
     return nothing
 end
 
@@ -217,10 +306,13 @@ end
 # all in light gray.  "orbits:" header aligns the chains vertically.
 function Base.show(io::IO, ::MIME"text/plain", e::IrrepShiftExpr)
     show(io, e)
-    header = "\n    orbits: "
-    indent = "\n" * " "^(length(header)-1)
-    for (i, t) in enumerate(e.terms)
-        i == 1 ? printstyled(io, header; color=:blue) : print(io, indent)
+    _print_orbits(io, e)
+end
+
+function _print_orbits(io::IO, e::AbstractShiftExpr)
+    printstyled(io, "\n  orbits:"; color=:light_blue)
+    for t in e.terms
+        length(e.terms) > 1 ? print(io, "\n    ") : print(io, " ") # inline if just one orbit
         _print_orbit_chain(io, t.orbit_relations; color=:light_black)
     end
 end
@@ -319,32 +411,38 @@ function Base.show(io::IO, e::MultipletShiftExpr)
         printstyled(io, " (vanishing first-order shifts)"; color=:light_black)
         return nothing
     end
-    printstyled(io, "-(ω/2ε)·eigvals("; color=:light_black)
+    printstyled(io, "-(ω/2ε) "; color=:light_black)
+    print(io, "eigvals"); printstyled(io, "("; color=:light_blue)
     for (k, t) in enumerate(e.terms)
-        k > 1 && printstyled(io, " + "; color=:light_black)
-        show(io, t)
+        k > 1 && printstyled(io, " + "; color=:light_blue)
+        b_str = _b_label(t.canonical_b)
+        print(io, "A", _subscript(k), "·Δε", b_str)
     end
-    printstyled(io, ")"; color=:light_black)
+    printstyled(io, ")"; color=:light_blue)
     return nothing
 end
 
 function Base.show(io::IO, ::MIME"text/plain", e::MultipletShiftExpr)
     show(io, e)
     isempty(e.terms) && return nothing
-    # Trace annotation: Σ eigenvalues = -(ω/2ε)·L where L = Σ_k Tr(A_k)·Δε[bₖ].
-    # _print_linform is defined in doublet_eigenvalues.jl (included after this file).
+    # Trace annotation: Σ eigenvalues = -(ω/2ε)·L where L = Σ_k Tr(Aₖ)·Δε[bₖ].
     tr_coefs = [real(tr(t.coefficient)) for t in e.terms]
     if !all(x -> abs(x) < 1e-10, tr_coefs)
-        printstyled(io, "\n    L = "; color=:light_black)
+        printstyled(io, "\n  L = "; color=:light_black)
         _print_linform(io, tr_coefs, e.terms)
-        printstyled(io, "  [Σ shifts = -(ω/2ε)·L]"; color=:light_black)
+        printstyled(io, " [Σ Δω = -(ω/2ε)·L]"; color=:light_black)
     end
-    header = "\n    orbits: "
-    indent = "\n" * " "^(length(header)-1)
-    for (i, t) in enumerate(e.terms)
-        i == 1 ? printstyled(io, header; color=:blue) : print(io, indent)
-        _print_orbit_chain(io, t.orbit_relations; color=:light_black)
+    # Matrices block: Aₖ = _format_matrix_inline(term.coefficient) for each term.
+    printstyled(io, "\n  matrices:"; color=:light_blue)
+    for (k, t) in enumerate(e.terms)
+        b_str = _b_label(t.canonical_b)
+        mat_str = _format_matrix_inline(t.coefficient)
+        print(io, "\n    A", _subscript(k))
+        printstyled(io, "@Δε", b_str, " "; color=:light_black)
+        print(io, "= ", mat_str)
     end
+    # Orbits block
+    _print_orbits(io, e)
 end
 
 # Collection{AbstractShiftExpr} display
@@ -363,14 +461,14 @@ end
 
 # Compact label for the collection inline display: bare irrep label for M=1,
 # "K₃+K₃" style for M=2, etc.
-_expr_label(e::IrrepShiftExpr)    = label(e.lgir)
-_expr_label(e::DoubletShiftExpr)  = (lbl = label(e.lgir); lbl * "+" * lbl)
-_expr_label(e::MultipletShiftExpr) = join(Iterators.repeated(label(e.lgir), e.M), "+")
+Crystalline.label(e::IrrepShiftExpr) = label(e.lgir)
+Crystalline.label(e::DoubletShiftExpr) = (lbl = label(e.lgir); lbl * "+" * lbl)
+Crystalline.label(e::MultipletShiftExpr) = join(Iterators.repeated(label(e.lgir), e.M), "+")
 
 function Base.show(io::IO, es::Collection{<:AbstractShiftExpr{D}}) where D
     summary(io, es)
     print(io, "[")
-    join(io, (_expr_label(e) for e in es), ", ")
+    join(io, (label(e) for e in es), ", ")
     print(io, "]")
 end
 

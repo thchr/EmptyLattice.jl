@@ -13,9 +13,11 @@
 #   The little group decomposes this into exactly:
 #     X₅⁺ (2D irrep, multiplicity 1)  and  X₅⁻ (2D irrep, multiplicity 1)
 #
-#   The only b-orbit connecting orbit points is {[0,1,0], [0,-1,0]} (canonical: [0,1,0]).
+#   The only b-orbit connecting orbit points contains {[0,±1,0]} as active members.
+#   Under sg × {±1} the full orbit is {[±1,0,0], [0,±1,0], [0,0,±1]}; after uniform
+#   lex sort the canonical is [-1,0,0] (lex-smallest overall, even though inactive).
 #   Regression values (not analytically hand-derived):
-#     X₅⁺: A_{[0,1,0]} = -1  →  Δω = +(ω/2ε) Δε[0,1,0]
+#     X₅⁺: A_{[b_canonical]} = -1  →  Δω = +(ω/2ε) Δε[canonical]
 #     X₅⁻: vanishing first-order shift
 
 using Test, Crystalline, LinearAlgebra
@@ -41,7 +43,7 @@ using EmptyLattice.PerturbationTheory
         orbit = kvGsv[1]
         @test length(orbit) == 2
 
-        Γs = gamma_matrices(orbit, lg; Gs)
+        Γs = gamma_matrices(orbit, lg, Gs)
         @test length(Γs) == length(lg)
         @test all(size(Γ) == (4, 4) for Γ in Γs)
         @test all(Γ * Γ' ≈ I for Γ in Γs)     # unitary
@@ -54,7 +56,7 @@ using EmptyLattice.PerturbationTheory
 
     # ── frequency_shifts ───────────────────────────────────────────────────────── #
     @testset "frequency_shifts: irrep selection and terms" begin
-        es = frequency_shifts(lgirs_X, 1; Gs)
+        es = frequency_shifts(lgirs_X, Gs, 1)
 
         # Only X₅⁺ and X₅⁻ are present (each with multiplicity 1)
         @test length(es) == 2
@@ -71,14 +73,16 @@ using EmptyLattice.PerturbationTheory
         # Regression: the orbit-summed geometric factor for X₅⁺ is exactly -1
         @test eX5p.terms[1].coefficient ≈ -1.0  atol=1e-10
 
-        # Canonical b-vector is [0,1,0] (or equivalent under round-off)
+        # Canonical b-vector: fewest negatives, then fewest nonzeros, then positive-first.
+        # For Pm-3m at the X-point, the full orbit is {[±1,0,0],[0,±1,0],[0,0,±1]};
+        # the canonical is [1,0,0] (positive first component, only one nonzero).
         b_int = round.(Int, parent(eX5p.terms[1].canonical_b))
-        @test b_int == [0, 1, 0] || b_int == [0, -1, 0]
+        @test b_int == [1, 0, 0]
     end
 
     # ── evaluate ────────────────────────────────────────────────────────────────── #
     @testset "evaluate (regression)" begin
-        es  = frequency_shifts(lgirs_X, 1; Gs)
+        es  = frequency_shifts(lgirs_X, Gs, 1)
         ω   = es[1].ω
 
         eX5p = only(e for e in es if label(e.lgir) == "X₅⁺")

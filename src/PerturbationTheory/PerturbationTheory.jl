@@ -23,6 +23,8 @@ export OrbitRelations, ShiftTerm, IrrepShiftExpr
 export MultipletShiftTerm, DoubletShiftExpr, MultipletShiftExpr
 export AbstractShiftExpr
 export evaluate
+export plot_dielectric, plot_dielectric!
+export canonical_orbits
 
 # ---------------------------------------------------------------------------------------- #
 

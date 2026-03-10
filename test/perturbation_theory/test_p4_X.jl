@@ -60,11 +60,15 @@ using EmptyLattice.PerturbationTheory
     @test abs(dot(cs[1], cs[2])) < 1e-10
 
     # --- TM frequency shifts ---
-    b = orbit[2] .- orbit[1]
     Δε₀ = 0.5
-    Δε_fourier = Dict(b => Δε₀, -b => Δε₀)
 
-    es_TM     = frequency_shifts(lgirs_X, orbit_idx; polarization=:TM, Gs)
+    es_TM = frequency_shifts(lgirs_X, Gs, orbit_idx; polarization=:TM)
+    # The canonical b-vector is the lex-smallest member of the full orbit under sg × {±1},
+    # which may be a reality-closure partner (inactive) rather than a connecting vector.
+    # All orbit members share the same canonical Fourier amplitude by the phase relations,
+    # so providing Δε at the canonical suffices.
+    canonical_b = es_TM[1].terms[1].canonical_b
+    Δε_fourier = Dict(canonical_b => Δε₀)
     result_TM = evaluate(es_TM, Δε_fourier)
 
     Δωs_TM = collect(values(result_TM))
@@ -79,8 +83,9 @@ using EmptyLattice.PerturbationTheory
     # --- TE frequency shifts ---
     # q₂ = -q₁ at X-point ⟹ TE overlap ê_{q₂}†ê_{q₁} = q̂₂·q̂₁ = -1
     # All geometric factors f_b flip sign relative to TM: TE shifts are negatives of TM.
-    es_TE     = frequency_shifts(lgirs_X, orbit_idx; polarization=:TE, Gs)
-    result_TE = evaluate(es_TE, Δε_fourier)
+    # The canonical b is the same for TM and TE (orbit structure is polarization-independent).
+    es_TE     = frequency_shifts(lgirs_X, Gs, orbit_idx; polarization=:TE)
+    result_TE = evaluate(es_TE, Δε_fourier)  # same Δε_fourier: canonical b is unchanged
 
     for lab in keys(result_TM)
         @test result_TE[lab] ≈ -result_TM[lab]  atol=1e-10

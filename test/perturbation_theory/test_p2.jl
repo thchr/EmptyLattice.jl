@@ -73,7 +73,7 @@ using EmptyLattice.PerturbationTheory
     Δε₀ = 0.5
     Δε_fourier = Dict(b => Δε₀, -b => Δε₀)
 
-    es_TM     = frequency_shifts(lgirs, orbit_idx; polarization=:TM, Gs)
+    es_TM     = frequency_shifts(lgirs, Gs, orbit_idx; polarization=:TM)
     result_TM = evaluate(es_TM, Δε_fourier)
 
     # A and B irreps: equal magnitude, opposite sign
@@ -84,7 +84,7 @@ using EmptyLattice.PerturbationTheory
     # --- TE frequency shifts ---
     # q₂ = -q₁ in this orbit, so TE overlap ê_{q₂}†ê_{q₁} = q̂₂·q̂₁ = -1:
     # all geometric factors f_b flip sign relative to TM.
-    es_TE     = frequency_shifts(lgirs, orbit_idx; polarization=:TE, Gs)
+    es_TE     = frequency_shifts(lgirs, Gs, orbit_idx; polarization=:TE)
     result_TE = evaluate(es_TE, Δε_fourier)
 
     for lab in keys(result_TM)
