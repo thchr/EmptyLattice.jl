@@ -21,7 +21,7 @@ using Test, Crystalline, LinearAlgebra
 using EmptyLattice
 using EmptyLattice.PerturbationTheory
 
-@testset "p4 M-point (TM and TE)" begin
+@testset "p4 M-point (TM and TE)" begin  # outer testset also covers orbits/canonical_orbits
     sgnum = 10  # plane group p4
     D = 2
 
@@ -105,4 +105,25 @@ using EmptyLattice.PerturbationTheory
     @test getΔω(result_TE, 2) ≈  factor * Δε₁₁  atol=1e-10  # same as M₁: Δε₁₀ has no TE effect
     @test getΔω(result_TE, 3) ≈ -factor * Δε₁₁  atol=1e-10
     @test getΔω(result_TE, 4) ≈ -factor * Δε₁₁  atol=1e-10  # M₃ = M₄ for TE too
+
+    # --- orbits and canonical_orbits ---
+    @testset "orbits / canonical_orbits" begin
+        es_TM = frequency_shifts(lgirs_M, Gs, orbit_idx; polarization=:TM)
+
+        # single-expression: one OrbitRelations per term
+        ors1 = orbits(es_TM[1])
+        @test ors1 isa Vector{OrbitRelations{2}}
+        @test length(ors1) == length(es_TM[1].terms)   # 2 b-orbits
+        @test all(ors1[k].orbit[1] == es_TM[1].terms[k].canonical_b for k in eachindex(ors1))
+
+        # collection: deduplicates across the 4 irreps → still 2 unique orbits
+        ors = orbits(es_TM)
+        @test ors isa Vector{OrbitRelations{2}}
+        @test length(ors) == 2
+
+        # order and canonical b-vectors match canonical_orbits
+        cbs = canonical_orbits(es_TM)
+        @test length(ors) == length(cbs)
+        @test all(ors[k].orbit[1] == cbs[k] for k in eachindex(ors))
+    end
 end

@@ -48,6 +48,35 @@ shift term in a single `AbstractShiftExpr` or a collection of shift expressions.
 canonical_orbits(e::AbstractShiftExpr) = [term.canonical_b for term in e.terms]
 canonical_orbits(es::Collection) = unique(reduce(vcat, (canonical_orbits(e) for e in es)))
 
+"""
+    orbits(e::AbstractShiftExpr{D})
+    orbits(es::Collection{<:AbstractShiftExpr{D}})
+    -> Vector{OrbitRelations{D}}
+
+Extract the unique `OrbitRelations` objects associated with each shift term in a single
+`AbstractShiftExpr` or a collection of shift expressions. Uniqueness is determined by
+the canonical b-vector; orbits appearing in multiple irreps are returned only once.
+
+This is the parallel of [`canonical_orbits`](@ref) (which returns only the canonical
+b-vectors); `orbits` returns the full orbit data needed for e.g. [`plot_dielectric`](@ref):
+
+```julia
+plot_dielectric(orbits(es), [Δε₁, Δε₂], Gs)
+```
+"""
+orbits(e::AbstractShiftExpr{D}) where D = OrbitRelations{D}[term.orbit_relations for term in e.terms]
+function orbits(es::Collection)
+    D      = dim(first(es))
+    seen   = Set{ReciprocalPoint{D}}()
+    result = OrbitRelations{D}[]
+    for e in es, term in e.terms
+        term.canonical_b ∈ seen && continue
+        push!(seen, term.canonical_b)
+        push!(result, term.orbit_relations)
+    end
+    return result
+end
+
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 # Shared orbit type
 # ──────────────────────────────────────────────────────────────────────────────────────── #

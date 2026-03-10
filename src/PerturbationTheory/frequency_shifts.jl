@@ -361,8 +361,15 @@ Visualize the real-space dielectric perturbation
 ```
 as a `contourf` plot over the 2D unit cell.
 
+The typical workflow starting from a collection of shift expressions `es`:
+```julia
+ors = orbits(es)                                 # extract OrbitRelations from es
+plot_dielectric(ors, [Δε₁, Δε₂, ...], Gs)       # one Δεₖ per orbit
+```
+
 # Arguments
-- `orbits::Vector{OrbitRelations{2}}`: orbit members and phase relations for each b-orbit
+- `orbits::Vector{OrbitRelations{2}}`: orbit members and phase relations for each b-orbit;
+  use [`orbits`](@ref) to extract these from a `Collection{<:AbstractShiftExpr}`
 - `Δεs::Vector{<:Real}`: canonical Fourier component Δε_k for each orbit
 - `Gs_or_Rs::Union{ReciprocalBasis{2}, DirectBasis{2}, Nothing} = nothing`:
   lattice basis used to set the coordinate system.
