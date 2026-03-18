@@ -261,7 +261,7 @@ and verify correctness end-to-end.
 | CP-B  | Display (tilde notation)             | CP-A       | DONE   |
 | CP-C  | Comments and docstrings              | CP-A, CP-B | DONE   |
 | CP-D  | Tests                                | CP-A, CP-B | DONE   |
-| CP-E  | Doc cleanup                          | all        | yes    |
+| CP-E  | Doc cleanup                          | all        | DONE   |
 
 **CP-A** is the critical change. After CP-A, the existing test suite should still pass
 (since all existing tests use cosine orbits where θ = 0 and `coefs[1]` remains 1). The
