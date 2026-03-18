@@ -284,28 +284,28 @@ API cleanup already done:
 - `b_vector_orbits` local vars consistently named `active`/`conjugate` (matching struct
   fields); canonical always has `conjugate=false` (flip logic added).
 
-### 5a: Known limitation — complex canonical Δε  [TODO: decide & fix]
+### 5a: Constraint-phase re-anchoring  [IN PROGRESS → see `docs/constraint-phase-plan.md`]
 
-`evaluate` silently gives wrong results when `Δε[canonical]` is complex AND the orbit
-contains `conjugate=true` members. The formula `A * Δε[canonical]` is correct only for
-real canonical. For a complex canonical, conjugate members satisfy
-`Δε[b] = conj(Δε[canonical]) / coef`, so their contribution should weight by
-`conj(Δε[canonical])`, not `Δε[canonical]`.
+**Problem**: `frequency_shifts` fails for non-symmorphic non-centrosymmetric space groups
+where reality of Δε(r) forces certain canonical Fourier coefficients to be complex.
+The `coefs[1] = 1` convention assumes the user's input equals the raw (real) Fourier
+coefficient, but for "sine-like" and "general-phase" orbits this is impossible.
 
-**Root cause**: the orbit-summed geometric factor `A` is computed as
-`Σ_{active i} conj(phase[i]) * f_{b_i}`, accumulating non-conjugate and conjugate active
-members with the same `Δε[canonical]` weight. This is correct only when `Δε[canonical]`
-is real (then `conj(Δε[canonical]) = Δε[canonical]`).
+**Analysis**: see `docs/sine-orbit-bug.md` for the full derivation, examples, and
+numerical verification.
 
-**Options**:
-- (a) Input validation in `evaluate`: if any orbit has a `conjugate=true` active member
-  and `Δε[canonical]` is not real, throw an informative error.
-- (b) Formula extension: split the active sum into conjugate and non-conjugate parts,
-  weighting the conjugate part by `conj(Δε[canonical])` separately.
+**Fix**: re-anchor orbit phases so the common RHS of the orbit relation is always real
+(`coefs[1] = exp(iθ)` where θ = arg(α)/2, α = phase(−b_canonical)). This makes A
+real/Hermitian by construction. The user always specifies one real number per orbit.
+Display uses `Δε̃[b]` (tilde) for non-cosine orbits to distinguish from the raw Fourier
+coefficient.
 
-Decision deferred. For now documented here as a known limitation. Option (a) is a safe
-minimal fix; option (b) requires splitting the A accumulation in `_make_scalar_terms` /
-`_make_matrix_terms`.
+**Implementation plan**: `docs/constraint-phase-plan.md` (phases CP-A through CP-E).
+
+This also resolves the previously documented limitation about complex canonical Δε with
+conjugate members: the new convention ensures Δε̃ is always real, so the conjugate-member
+formula `Δε[b] = conj(Δε[canonical]) = Δε̃ · exp(iθ)` reduces to a pure phase times the
+real input.
 
 ### 5b: Test — M=2 at non-TRIM k-point with conjugate orbit members  [TODO]
 
