@@ -15,9 +15,8 @@ using Makie
 # orbits[k].orbit is the **full** orbit under sg × {±1}, including both active
 # (connecting) and inactive members, and both sg-BFS and reality-closure members.
 # Summing over all members with the formula conj(coefs[i]) · Δεs[k] · exp(2πi b·r)
-# is correct for all member types when Δεs[k] = Δε[canonical_b] is real:
-#   - non-conjugate: Δε[b_i] = Δεs[k] · conj(coefs[i])      (phase relation)
-#   - conjugate:     Δε[b_i] = conj(Δεs[k]) · conj(coefs[i]) = Δεs[k] · conj(coefs[i])
+# is correct for all member types: Δεs[k] = Δε̃ (the real free parameter per orbit),
+# and Δε[b_i] = Δε̃/coefs[i] = conj(coefs[i])·Δε̃ (using |coefs[i]|=1).
 # Δε(r) is real because the orbit is closed under b ↔ -b; imaginary parts cancel.
 function _eval_Δε(orbits, Δεs, x::Real, y::Real)
     val = 0.0

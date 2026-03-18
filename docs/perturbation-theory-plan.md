@@ -284,25 +284,25 @@ API cleanup already done:
 - `b_vector_orbits` local vars consistently named `active`/`conjugate` (matching struct
   fields); canonical always has `conjugate=false` (flip logic added).
 
-### 5a: Constraint-phase re-anchoring  [IN PROGRESS → see `docs/constraint-phase-plan.md`]
+### 5a: Constraint-phase re-anchoring  [DONE — see `docs/constraint-phase-plan.md`]
 
-**Problem**: `frequency_shifts` fails for non-symmorphic non-centrosymmetric space groups
+**Problem**: `frequency_shifts` failed for non-symmorphic non-centrosymmetric space groups
 where reality of Δε(r) forces certain canonical Fourier coefficients to be complex.
-The `coefs[1] = 1` convention assumes the user's input equals the raw (real) Fourier
+The `coefs[1] = 1` convention assumed the user's input equals the raw (real) Fourier
 coefficient, but for "sine-like" and "general-phase" orbits this is impossible.
 
 **Analysis**: see `docs/sine-orbit-bug.md` for the full derivation, examples, and
 numerical verification.
 
-**Fix**: re-anchor orbit phases so the common RHS of the orbit relation is always real
-(`coefs[1] = exp(iθ)` where θ = arg(α)/2, α = phase(−b_canonical)). This makes A
-real/Hermitian by construction. The user always specifies one real number per orbit.
-Display uses `Δε̃[b]` (tilde) for non-cosine orbits to distinguish from the raw Fourier
-coefficient.
+**Fix** (implemented): re-anchor orbit phases so the common RHS of the orbit relation is
+always real (`coefs[1] = exp(iθ)` where `θ = −arg(α)/2`, `α = phase(−b_canonical)`).
+This makes A real/Hermitian by construction. The user always specifies one real number per
+orbit. Display uses `Δε̃[b]` (tilde) for non-cosine orbits to distinguish from the raw
+Fourier coefficient.
 
-**Implementation plan**: `docs/constraint-phase-plan.md` (phases CP-A through CP-E).
+**Implementation**: `docs/constraint-phase-plan.md` (phases CP-A through CP-E).
 
-This also resolves the previously documented limitation about complex canonical Δε with
+This also resolved the previously documented limitation about complex canonical Δε with
 conjugate members: the new convention ensures Δε̃ is always real, so the conjugate-member
 formula `Δε[b] = conj(Δε[canonical]) = Δε̃ · exp(iθ)` reduces to a pure phase times the
 real input.

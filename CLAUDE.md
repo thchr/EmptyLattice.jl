@@ -87,7 +87,8 @@ evaluate(es, Dict(SVector(1.0,0.0) => 0.3, SVector(1.0,1.0) => 0.2))
 
 ### Key types
 - `OrbitRelations{D}` — orbit of a b-vector + phase coefficients
-  - Convention: `coefs[i] * Δε[orbit[i]] = Δε[orbit[1]]` (canonical)
+  - Convention: `coefs[i] * Δε[orbit[i]] = Δε̃` (real common RHS)
+  - `coefs[1] = exp(iθ)` where `θ = −arg(α)/2`, `α` = constraint phase; = 1 for cosine orbits
   - Phase: `coefs[i] = exp(+2πi b_i · w)` for operation g=(W,w) mapping canonical→b_i
 - `ShiftTerm{D}` — one b-orbit's contribution: `coefficient::Float64`, `canonical_b`, `orbit_relations`
 - `IrrepShiftExpr{D}` — all terms for one irrep; stores `lgir`, `ω`, `polarization`, `terms`
@@ -108,7 +109,7 @@ evaluate(es, Dict(SVector(1.0,0.0) => 0.3, SVector(1.0,1.0) => 0.2))
 - **`dualbasis`** (not deprecated `reciprocalbasis`) for reciprocal basis
 - **`ReciprocalPoint{D}` for b-vectors** throughout `b_vector_orbits`; use `isapprox(b, b′, nothing, #=modw=#false; atol)` for non-modular comparison (plain `isapprox` on `ReciprocalPoint` compares modulo integer lattice vectors — `[1,0]` and `[-1,0]` incorrectly compare as equal)
 - **`g * b`** (where `b::ReciprocalPoint{D}`) to apply symmetry operation in reciprocal space; this uses `(W⁻¹)ᵀ · parent(b)` correctly
-- **`b_vector_orbits` canonical**: lex-smallest orbit member (by `Tuple(parent(b))`); phases re-anchored so canonical has phase 1. b and -b always co-orbit (full-SG BFS + explicit -b pairing for groups without inversion).
+- **`b_vector_orbits` canonical**: lex-smallest orbit member (by `Tuple(parent(b))`); phases re-anchored so canonical has phase `exp(iθ)` (= 1 for cosine orbits; see constraint-phase convention). b and -b always co-orbit (full-SG BFS + explicit -b pairing for groups without inversion).
 - **Polarization**: 2D requires `:TM` or `:TE`; 3D uses `nothing` (two transverse polarizations handled automatically)
 - **M>1 coefficient matrices are Hermitian** (not real symmetric) — non-symmorphic phases can make off-diagonal elements complex
 

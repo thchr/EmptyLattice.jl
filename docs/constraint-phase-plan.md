@@ -92,7 +92,7 @@ examples now succeed:
 
 ---
 
-## CP-B: Update display for tilde notation
+## CP-B: Update display for tilde notation — DONE
 
 **Files**: `src/PerturbationTheory/perturbation_results.jl`,
 `src/PerturbationTheory/doublet_eigenvalues.jl`
@@ -150,7 +150,7 @@ the presence/absence of tilde in the expected places.
 
 ---
 
-## CP-C: Update comments and docstrings
+## CP-C: Update comments and docstrings — DONE
 
 **Files**: `gamma_rep.jl`, `perturbation_results.jl`, `frequency_shifts.jl`,
 `ext/EmptyLatticeMakieExt.jl`, `CLAUDE.md`, `docs/perturbation-theory-plan.md`
@@ -257,9 +257,9 @@ and verify correctness end-to-end.
 
 | Phase | Description                          | Depends on | Commit |
 |-------|--------------------------------------|------------|--------|
-| CP-A  | Re-anchoring logic                   | —          | yes    |
-| CP-B  | Display (tilde notation)             | CP-A       | yes    |
-| CP-C  | Comments and docstrings              | CP-A, CP-B | yes    |
+| CP-A  | Re-anchoring logic                   | —          | DONE   |
+| CP-B  | Display (tilde notation)             | CP-A       | DONE   |
+| CP-C  | Comments and docstrings              | CP-A, CP-B | DONE   |
 | CP-D  | Tests                                | CP-A, CP-B | yes    |
 | CP-E  | Doc cleanup                          | all        | yes    |
 

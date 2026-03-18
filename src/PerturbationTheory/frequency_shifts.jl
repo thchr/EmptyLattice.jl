@@ -266,14 +266,12 @@ function frequency_shifts(
         terms = ShiftTerm{D}[]
         for (canonical_b, full_bs, full_phases, active, conjugate) in b_orbits
             # Sum phase-weighted geometric factors over active (connecting) orbit members.
-            # For a G-symmetric Δε, members of the same b-orbit satisfy
-            # Δε[b'] = exp(-2πi b'·w) Δε[b₀] (where g=(W|w) maps b₀ → b').
-            # The stored phases satisfy phases[i]*Δε[b_i] = Δε[canonical] (for non-conjugate
-            # members) or phases[i]*Δε[b_i] = conj(Δε[canonical]) (for conjugate members).
-            # Assuming a real canonical Fourier component, in both cases
-            # Δε[b_i] = conj(phases[i])*Δε[canonical], so the orbit-summed coefficient is:
+            # The stored phases satisfy phases[i]*Δε[b_i] = Δε̃ (the real free parameter)
+            # for all members (sg and conjugate alike), so Δε[b_i] = Δε̃/phases[i] =
+            # conj(phases[i])*Δε̃ (using |phases[i]|=1). The orbit-summed coefficient is:
             #   A = Σ_{active i} conj(phases[i]) * f_{b_i}
-            # For symmorphic groups all phases are 1 and this reduces to Σ f_{b'}.
+            # A is guaranteed real by the constraint-phase re-anchoring (θ = -arg(α)/2),
+            # which ensures coefs[-b_k] = conj(coefs[b_k]) for every paired (b_k, -b_k).
             active_bs     = full_bs[active]
             active_phases = full_phases[active]
             A = if D == 3
@@ -295,8 +293,8 @@ function frequency_shifts(
 
     # Closure: M×M orbit-summed geometric factor matrix for multiplicity-M states cs (M>1).
     # Same phase-weighting logic as _make_scalar_terms; here A is an M×M Hermitian matrix.
-    # Because b_orbits is computed with the full space group (which contains inversion or
-    # equivalent operations merging b and -b orbits), each orbit's A is guaranteed Hermitian.
+    # Hermiticity is guaranteed by the constraint-phase re-anchoring, which ensures
+    # coefs[-b_k] = conj(coefs[b_k]) for every paired (b_k, -b_k) in the orbit.
     function _make_matrix_terms(cs)
         terms = MultipletShiftTerm{D}[]
         for (canonical_b, full_bs, full_phases, active, conjugate) in b_orbits

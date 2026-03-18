@@ -244,10 +244,12 @@ members contribute to the frequency-shift formula; all members are needed for co
   chosen by a uniform lex sort so that the canonical is consistent across k-points and
   degeneracy indices
 - `full_bs`: all orbit members under sg × {±1}, lex-sorted uniformly (`canonical_b` first)
-- `phases`: `ComplexF64` such that `phases[i] * Δε[full_bs[i]] = Δε[canonical_b]`;
-  `phases[1] = 1` by definition.  For g = (W,w) mapping the BFS predecessor of `bᵢ` to
-  `bᵢ`, the phase accumulates as `p * cispi(+2 * dot(bᵢ, w))`.  For `-b` partners added
-  by reality closure, `phase[-b] = conj(phase[b])`.
+- `phases`: `ComplexF64` such that `phases[i] * Δε[full_bs[i]] = Δε̃` where `Δε̃` is the
+  real free parameter for the orbit.  `phases[1] = exp(iθ)` where `θ = −arg(α)/2` and
+  `α = phase(−b_canonical)/phase(b_canonical)` is the constraint phase.  For cosine orbits
+  (α = +1), `phases[1] = 1` as before.  The BFS phase rule: for g = (W,w) mapping the
+  predecessor of `bᵢ` to `bᵢ`, the phase accumulates as `p * cispi(+2 * dot(bᵢ, w))`.
+  For `-b` partners added by reality closure, `phase[-b] = conj(phase[b])`.
 - `active`: `Vector{Bool}` with `active[i] = true` iff `full_bs[i]` is a connecting
   vector `qⱼ - qᵢ` in `{kvGsv[j] - kvGsv[i]}`
 - `conjugate`: `Vector{Bool}` with `conjugate[i] = true` iff `full_bs[i]` is conjugation-

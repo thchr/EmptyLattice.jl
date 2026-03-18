@@ -96,10 +96,13 @@ closure).  Two masks distinguish member types:
 
 - **`conjugate`**: `orbit[i]` entered the orbit via the -b reality-closure step (not via the
   space-group BFS).  For non-conjugate members the relation to the canonical is a phase:
-  `coefs[i] · Δε[orbit[i]] = Δε[canonical]`.  For conjugate members the true relation is a
-  conjugation: `coefs[i] · Δε[orbit[i]] = conj(Δε[canonical])`, which reduces to the same
-  phase relation only when `Δε[canonical]` is real.  `evaluate` and the coefficient
-  formulae in `frequency_shifts` assume a **real** canonical Fourier component.
+  `coefs[i] · Δε[orbit[i]] = Δε̃`.  For conjugate members the true relation involves
+  conjugation, but the re-anchored coefs absorb this so the same formula holds.
+
+The orbit relation `coefs[i] · Δε[orbit[i]] = Δε̃` has a **real** common RHS `Δε̃` by
+construction (via the constraint-phase re-anchoring in `b_vector_orbits`).  `evaluate` and
+the coefficient formulae in `frequency_shifts` take `Δε̃` (not `Δε[canonical]`) as the
+user-facing input.  For cosine orbits, `Δε̃ = Δε[canonical]` since `coefs[1] = 1`.
 
 The space-group phase relation (non-conjugate members): for g = (W,w) mapping canonical
 to `orbit[i]`, `coefs[i] = exp(+2πi orbit[i] · w)`.  For symmorphic groups all `coefs = 1`.
@@ -107,7 +110,8 @@ to `orbit[i]`, `coefs[i] = exp(+2πi orbit[i] · w)`.  For symmorphic groups all
 # Fields
 - `orbit::Vector{ReciprocalPoint{D}}`: full orbit members, lex-sorted; `orbit[1]` is the
   canonical b-vector (lexicographically smallest overall, active or not)
-- `coefs::Vector{ComplexF64}`: weight coefficients; `coefs[1] = 1.0`
+- `coefs::Vector{ComplexF64}`: weight coefficients; `coefs[1] = exp(iθ)` where
+  `θ = −arg(α)/2` and `α` is the constraint phase (= 1 for cosine orbits)
 - `active::Vector{Bool}`: `active[i] = true` iff `orbit[i]` is a connecting vector `qⱼ - qᵢ`
 - `conjugate::Vector{Bool}`: `conjugate[i] = true` iff `orbit[i]` entered via -b reality
   closure (relation to canonical is conjugation, not a pure phase)
