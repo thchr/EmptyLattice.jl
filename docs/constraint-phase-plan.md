@@ -260,7 +260,7 @@ and verify correctness end-to-end.
 | CP-A  | Re-anchoring logic                   | —          | DONE   |
 | CP-B  | Display (tilde notation)             | CP-A       | DONE   |
 | CP-C  | Comments and docstrings              | CP-A, CP-B | DONE   |
-| CP-D  | Tests                                | CP-A, CP-B | yes    |
+| CP-D  | Tests                                | CP-A, CP-B | DONE   |
 | CP-E  | Doc cleanup                          | all        | yes    |
 
 **CP-A** is the critical change. After CP-A, the existing test suite should still pass
