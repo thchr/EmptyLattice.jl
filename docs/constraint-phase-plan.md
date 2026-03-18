@@ -11,64 +11,84 @@ equates the user's input `Δε[canonical]` with the raw Fourier coefficient. For
 non-symmorphic non-centrosymmetric space groups, reality of Δε(r) can force this Fourier
 coefficient to be complex, breaking the assumption that the orbit-summed geometric factor
 A is real (M=1) or Hermitian (M>1). The fix: re-anchor so the common RHS of the orbit
-relation is always real, i.e., `coefs[1] = exp(iθ)` where θ = arg(α)/2 and α is the
+relation is always real, i.e., `coefs[1] = exp(iθ)` where **θ = −arg(α)/2** and α is the
 "constraint phase" `phase(−b_canonical)`.
+
+**Critical sign choice**: θ = −arg(α)/2 (not +). The positive sign satisfies the reality
+condition on Δε̃ alone, but ONLY the negative sign additionally ensures Hermiticity of the
+orbit-summed geometric factor A. See proof in `docs/sine-orbit-bug.md`, section
+"Why θ = −arg(α)/2 (not +arg(α)/2)".
 
 ---
 
-## CP-A: Re-anchoring logic in `b_vector_orbits`
+## CP-A: Re-anchoring logic in `b_vector_orbits` — DONE
 
 **Files**: `src/PerturbationTheory/gamma_rep.jl`
 
-**Task**: Change the re-anchoring step (lines 390–396) so that `coefs[1] = exp(iθ)`
-instead of `coefs[1] = 1`.
+**Task**: Change the re-anchoring step so that `coefs[1] = exp(iθ)` instead of
+`coefs[1] = 1`.
 
-**Steps**:
+**Implementation** (lines 391–426 after edit):
 
-1. After the sort/permutation step (which determines the canonical b and orders the orbit),
-   find the index of `−b_canonical` in `full_bs`. Compute:
-   ```
-   α = full_phases[neg_idx] / full_phases[1]   (relative phase before re-anchoring)
-   θ = angle(α) / 2
-   ```
-   If `−b_canonical` is absent from the orbit (can this happen? — see design question
-   below), fall back to θ = 0.
+```julia
+neg_b_can = ReciprocalPoint{D}(-parent(full_bs[1]))
+neg_idx = findfirst(b -> isapprox(b, neg_b_can, nothing, false; atol), full_bs)
+if neg_idx !== nothing && !conjugate[neg_idx]
+    α = full_phases[neg_idx] / full_phases[1]
+    θ = -angle(α) / 2      # NOT +angle(α)/2 — see proof below
+else
+    θ = 0.0                 # -b_canonical is absent or a conjugate member: no constraint
+end
+anchor = cis(θ)
+s = full_phases[1] / anchor
+full_phases ./= s
+full_phases[conjugate] .*= s^2    # correction: conjugate members need /conj(s), not /s
+```
 
-2. Re-anchor: `full_phases ./= (full_phases[1] / exp(iθ))`, which sets
-   `full_phases[1] = exp(iθ)` and the common RHS to a real value.
+**Derivation of the re-anchoring and conjugate-member correction**:
 
-3. **Conjugate-member correction** (design work needed): The current correction
-   `full_phases[conjugate] .*= p_c^2` was derived under the `coefs[1] = 1` convention.
-   Must re-derive for the new convention.
+The orbit relation before re-anchoring is `p_k · Δε[b_k] = Δε[b₀]` (BFS convention).
+Define the re-anchoring divisor `s = p_c / exp(iθ)` where `p_c = full_phases[1]` (the
+canonical member's raw phase) and `anchor = exp(iθ)`.
 
-   **Derivation sketch**: For a conjugate member at index k, the physical relation is
-   `Δε[b_k] = conj(Δε[b_canonical]) / coefs_raw[k]`. We want the orbit relation
-   `coefs[k] · Δε[b_k] = Δε̃` to hold with Δε̃ real. Using
-   `Δε[b_canonical] = Δε̃ · exp(−iθ)`:
-   ```
-   Δε[b_k] = conj(Δε̃ · exp(−iθ)) / coefs_raw_k_relative
-            = Δε̃ · exp(iθ) / coefs_raw_k_relative
-   ```
-   So `coefs[k] = coefs_raw_k_relative / exp(iθ)`, whereas for non-conjugate members
-   `coefs[k] = coefs_raw_k_relative * exp(iθ)` (from the standard re-anchoring). The
-   correction factor between conjugate and non-conjugate is thus `1/exp(2iθ)`.
+For **sg members** (those found by BFS under the space group): dividing by s gives
+`coefs[k] = p_k/s`, and the common RHS becomes `Δε[b₀]/s = exp(iθ)·Δε[canonical] = Δε̃`.
 
-   This needs to be verified carefully against the existing `.*= p_c^2` logic to make sure
-   the raw-to-new transformation is correct. Write a self-contained derivation in the code
-   comments.
+For **conjugate members** (those added by −b reality closure): their raw phases were set
+as `conj(p_{sg partner})`, reflecting the relation `Δε[-b] = conj(Δε[b])`. The correct
+divisor for these members is `conj(s)`, not `s`, because their Fourier coefficients derive
+from conjugation rather than direct phase rotation.
 
-4. Update the docstring for `b_vector_orbits` (lines 246–258):
-   - `phases[1] = exp(iθ)` (not 1) where θ = arg(α)/2
-   - The common RHS `Δε̃ = coefs[1] · Δε[b_canonical]` is real by construction
-   - Document α and θ
+The correction `.*= s²` after the bulk `./= s` achieves this:
+```
+(raw/s) · s² = raw · s = raw / conj(s)     (using |s| = 1)
+```
+When θ = 0: `s = p_c`, recovering the old correction `.*= p_c²`.
 
-**Design question**: Can `−b_canonical` ever be absent from `full_bs`? In principle, the
-reality-closure step adds `−b` for every `b` in the orbit, so `−b_canonical` should
-always be present. Verify this assumption. If it can be absent (e.g., if `−b_canonical`
-is the zero vector, which is impossible since b connects distinct orbit points), add a
-guard.
+**Verification**: the orbit relation `coefs[k] · Δε[b_k] = Δε̃` holds for all members
+(sg and conjugate) with the same real RHS Δε̃, provided `Δε[canonical] = Δε̃ · exp(-iθ)`.
+This is verified algebraically in `docs/sine-orbit-bug.md` and numerically by the test
+suite (282 tests including the three constraint-phase examples).
 
-**Tests** (in CP-D): the re-anchoring is tested indirectly through `frequency_shifts`.
+**Design question resolved**: `−b_canonical` is always present (reality closure adds −b
+for every b). When it is a conjugate member (not an sg member), θ = 0 (no group-theoretic
+constraint, old behavior). When it is an sg member, α = p_neg/p_c gives the non-trivial
+constraint phase.
+
+**Why θ = −arg(α)/2 (not +)**: The sign is determined by the requirement that
+`coefs[-b_k] = conj(coefs[b_k])` for every (b_k, −b_k) pair, which makes the orbit-summed
+geometric factor A real (M=1) or Hermitian (M>1). Full proof in `docs/sine-orbit-bug.md`.
+In brief: the phase representation for negated vectors is the conjugate of the positive
+representation (`p_{-k}/p_{-1} = conj(p_k/p_1)`), and requiring `p_{-k}/s = conj(p_k/s)`
+gives `s² = α·p_c²`, hence `exp(2iθ) = conj(α)`, hence `θ = −arg(α)/2`. The positive
+sign θ = +arg(α)/2 gives `exp(2iθ) = α` instead, which only equals `conj(α)` when α is
+real (cosine/sine cases). For general complex α, only the negative sign is correct.
+
+**Verified**: all 249 existing tests pass (no regressions). The three bug-triggering
+examples now succeed:
+- sg=17, Z: coefs[1] = −i (sine, α = −1). Hermitian ✓
+- sg=92, R: coefs[1] = exp(−iπ/4) (general, α = +i). Hermitian ✓
+- sg=208, R: cosine coefs[1] = 1, sine coefs[1] = −i. Hermitian ✓
 
 ---
 
@@ -97,12 +117,12 @@ guard.
    ```
    Δε[b₁] = p₂·Δε[b₂] = p₃·Δε[b₃]
    ```
-   With the new convention, for a sine orbit (coefs = [i, -i]):
+   With the new convention, for a sine orbit (coefs = [-i, i]):
    ```
-   Δε̃[0,0,1] = i·Δε[0,0,1] = -i·Δε[0,0,-1]
+   Δε̃[0,0,1] = -i·Δε[0,0,1] = i·Δε[0,0,-1]
    ```
    The first element `Δε̃[b₁]` uses the tilde symbol; subsequent elements show
-   `coefs[i]·Δε[b_i]`. The chain reads: "Δε̃ = i·Δε[0,0,1] = −i·Δε[0,0,−1]", which
+   `coefs[i]·Δε[b_i]`. The chain reads: "Δε̃ = −i·Δε[0,0,1] = i·Δε[0,0,−1]", which
    shows how the real parameter relates to the actual Fourier coefficients.
 
    Implementation: for i==1, print `Δε̃[b]` or `Δε[b]` based on cosine check. For i>1,
@@ -140,7 +160,7 @@ the presence/absence of tilde in the expected places.
 **Steps**:
 
 1. **`gamma_rep.jl:248`** — docstring for `b_vector_orbits` return value. Update:
-   `phases[1] = exp(iθ)` where θ = arg(α)/2 and α = phase(−b_canonical).
+   `phases[1] = exp(iθ)` where θ = −arg(α)/2 and α = phase(−b_canonical).
 
 2. **`perturbation_results.jl:110`** — `OrbitRelations` docstring. Update:
    `coefs[1] = 1.0` → `coefs[1] = exp(iθ)` (= 1 for cosine orbits).
@@ -194,22 +214,22 @@ and verify correctness end-to-end.
 2. **Test: P222₁ (sg=17), Z-point, idx=1** (sine, α = −1):
    - `frequency_shifts` succeeds (no error)
    - Returns a `DoubletShiftExpr` for Z₁ (M=2)
-   - The orbit has `coefs[1] ≈ im` (= exp(iπ/2))
+   - The orbit has `coefs[1] ≈ -im` (= exp(-iπ/2))
    - The coefficient matrix is Hermitian
    - `evaluate` with a concrete Δε̃ value returns the correct shifts
    - The orbit chain display contains `Δε̃` (tilde)
 
-3. **Test: P4₁2₁2 (sg=92), R-point, idx=1** (general-phase, α = −i):
+3. **Test: P4₁2₁2 (sg=92), R-point, idx=1** (general-phase, α = +i for [1,0,1] orbit):
    - `frequency_shifts` succeeds
    - Has both cosine and general-phase orbits
-   - Cosine orbit has `coefs[1] ≈ 1`; general-phase orbits have `coefs[1] ≈ exp(−iπ/4)`
+   - General-phase orbits have `coefs[1] ≈ exp(−iπ/4)`
    - All coefficient matrices are Hermitian
    - `evaluate` returns correct shifts
 
 4. **Test: P4₂32 (sg=208), R-point, idx=1** (sine, α = −1, the original reproducer):
    - `frequency_shifts` succeeds
    - Cosine orbits [1,0,0] and [1,1,0] have `coefs[1] ≈ 1`
-   - Sine orbit [1,1,1] has `coefs[1] ≈ im`
+   - Sine orbit [1,1,1] has `coefs[1] ≈ -im`
    - All coefficient matrices are Hermitian
    - `evaluate` returns correct shifts
 
@@ -256,10 +276,10 @@ full test suite after CP-A before proceeding.
 
 ## Open design questions
 
-1. **Conjugate-member correction re-derivation** (CP-A step 3): The existing `.*= p_c^2`
-   correction was derived under `coefs[1] = 1`. The new derivation is sketched in CP-A but
-   must be verified algebraically and numerically. The key test case is p3 K-point (sg=13),
-   which has conjugate members.
+1. ~~**Conjugate-member correction re-derivation**~~ **RESOLVED in CP-A**: The correction
+   `.*= s^2` (where `s = p_c/anchor`) generalizes the old `.*= p_c^2`. When θ=0, s=p_c
+   and the correction is identical. All 249 tests pass including `test_p3_K.jl` (conjugate
+   members).
 
 2. **Unicode rendering of ε̃**: The combining tilde on ε may not render well in all
    terminals. Fallback: use `Δε~` or `Δξ` if combining characters are
@@ -267,7 +287,7 @@ full test suite after CP-A before proceeding.
 
 3. **`_phase_prefix` for coefs[1] in orbit chain**: For cosine orbits, coefs[1]=1 and
    `_phase_prefix(1) = ""`, so the display is `Δε[b]` — good. For sine orbits,
-   coefs[1]=i and `_phase_prefix(im) = "exp(2πi·1/4)·"` — this is correct but verbose.
+   coefs[1]=-i and `_phase_prefix(-im) = "exp(-2πi·1/4)·"` — this is correct but verbose.
    Consider special-casing: `i·` for ±i, `-` for −1. The existing `_phase_prefix` already
    handles −1 → `"-"`. It does NOT currently handle ±i specially. Consider adding this.
 

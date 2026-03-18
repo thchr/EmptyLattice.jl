@@ -58,19 +58,20 @@ Define α ≡ phase(−b_canonical). This is a unit-modulus complex number deter
 ```
 where g is the operation that maps b_canonical → −b_canonical.
 
-The constraint `conj(Δε) = α · Δε` means `Δε[canonical] = δ · exp(iθ)` where θ = arg(α)/2
-and δ ∈ ℝ is the single real free parameter for this orbit.
+The constraint `conj(Δε) = α · Δε` means `Δε[canonical] = δ · exp(iψ)` where
+`exp(2iψ) = α`, i.e. `ψ = arg(α)/2`, and δ ∈ ℝ is the single real free parameter for
+this orbit.
 
 ### Three cases
 
-- **α = +1** (b·w ∈ ℤ): θ = 0, so Δε[canonical] is real. This is the "cosine-like" case.
+- **α = +1** (b·w ∈ ℤ): ψ = 0, so Δε[canonical] is real. This is the "cosine-like" case.
   The orbit basis function is even. All symmorphic groups fall here.
-- **α = −1** (b·w ∈ ℤ+½): θ = π/2, so Δε[canonical] is purely imaginary. This is the
+- **α = −1** (b·w ∈ ℤ+½): ψ = π/2, so Δε[canonical] is purely imaginary. This is the
   "sine-like" case. The orbit basis function is odd. This is what happens for [1,1,1] in
   P4₂32, where the 4₂ screw has w = (0,0,½) and (1,1,1)·(0,0,½) = ½.
-- **General α** (b·w = p/q with q > 2): θ is neither 0 nor π/2; Δε[canonical] has a fixed
+- **General α** (b·w = p/q with q > 2): ψ is neither 0 nor π/2; Δε[canonical] has a fixed
   complex phase. Example: a 4₁ screw with w = (0,0,¼) and b·w = ¼ gives α = −i,
-  θ = −π/4.
+  ψ = −π/4.
 
 ### Why the checks fail
 
@@ -166,7 +167,7 @@ raw Fourier coefficient at the canonical b. For sine/general-phase orbits, reali
 this Fourier coefficient to be complex, making the "input" quantity complex.
 
 **Fix: re-anchor coefs so that the common RHS is always real.** Define Δε̃ (a real number,
-the user's input) and set `coefs[1] = exp(iθ)` where θ = arg(α)/2 (α is the constraint
+the user's input) and set `coefs[1] = exp(iθ)` where θ = −arg(α)/2 (α is the constraint
 phase). The orbit relation becomes:
 
 ```
@@ -178,19 +179,57 @@ The actual Fourier coefficient at the canonical b is then:
 Δε[b_canonical] = Δε̃ / coefs[1] = Δε̃ · exp(−iθ)
 ```
 
-This satisfies the reality constraint `conj(Δε[b]) = α · Δε[b]` because:
+### Why θ = −arg(α)/2 (not +arg(α)/2)
+
+Two conditions must hold: (1) Δε̃ must be real, and (2) the orbit-summed geometric factor
+A = Σ conj(coefs[k]) · f_{b_k} must be real (M=1) or Hermitian (M>1). Both reduce to the
+requirement that `coefs[−b_k] = conj(coefs[b_k])` for every paired (b_k, −b_k).
+
+**Proof.** Let s = full_phases[1] / exp(iθ) be the re-anchoring divisor. For sg members,
+`coefs[k] = p_k / s`. For −b_k also an sg member: `coefs[−k] = p_{−k} / s`.
+
+Key identity: the phase representation for negated vectors is the conjugate of the positive
+representation. If g maps b₁ → b_k with phase factor `cispi(2·b_k·w)`, then g maps
+−b₁ → −b_k with phase factor `cispi(−2·b_k·w) = conj(cispi(2·b_k·w))`. Therefore
+`p_{−k} / p_{−1} = conj(p_k / p_1)`, giving:
+
 ```
-conj(Δε̃ · exp(−iθ)) = Δε̃ · exp(iθ) = exp(2iθ) · Δε̃ · exp(−iθ) = α · Δε[b]
+p_{−k} = p_{−1} · conj(p_k / p_1) = p_{−1} · conj(p_k) · p_1    (using |p_1|=1)
 ```
-(using exp(2iθ) = α by definition of θ).
+
+Now require `coefs[−k] = conj(coefs[k])`, i.e., `p_{−k}/s = conj(p_k/s) = conj(p_k)·s`
+(using |s|=1). Substituting:
+
+```
+p_{−1} · conj(p_k) · p_1 / s = conj(p_k) · s
+⟹  p_{−1} · p_1 / s = s
+⟹  s² = p_{−1} · p_1 = α · p_1²
+```
+
+where α = p_{−1}/p_1 is the constraint phase. Since s = p_1/exp(iθ):
+
+```
+p_1²/exp(2iθ) = α · p_1²
+⟹  exp(2iθ) = 1/α = conj(α)    (using |α|=1)
+⟹  θ = −arg(α)/2
+```
+
+The sign is critical: θ = +arg(α)/2 gives exp(2iθ) = α, which satisfies condition (1)
+alone (Δε̃ real) but NOT condition (2) (Hermiticity of A) for general complex α. Only
+θ = −arg(α)/2 satisfies both conditions simultaneously.
+
+For α = ±1 (real), conj(α) = α, so either sign works. For general α ≠ ±1, only the
+negative sign is correct.
+
+### Special cases
 
 For **cosine orbits** (α = +1): θ = 0, so coefs[1] = 1 and Δε̃ = Δε[b] — completely
 unchanged from today.
 
-For **sine orbits** (α = −1): θ = π/2, so coefs[1] = i and Δε̃ = i · Δε[b_canonical].
-Since Δε[b_canonical] is purely imaginary, Δε̃ is real. ✓
+For **sine orbits** (α = −1): θ = −π/2 (or equivalently π/2), so coefs[1] = −i and
+Δε̃ = −i · Δε[b_canonical]. Since Δε[b_canonical] is purely imaginary, Δε̃ is real. ✓
 
-For **general-phase orbits** (e.g. α = −i, θ = −π/4): coefs[1] = exp(−iπ/4) and
+For **general-phase orbits** (e.g. α = +i, θ = −π/4): coefs[1] = exp(−iπ/4) and
 Δε̃ = exp(−iπ/4) · Δε[b_canonical]. ✓
 
 ### What changes for the orbit-summed coefficients
@@ -285,7 +324,7 @@ shows the phase prefix on all members including the first:
 ```
 orbits:
   Δε[1,0,0] = Δε[-1,0,0]                           ← cosine: coefs[1]=1
-  Δε̃[0,0,1] = i·Δε[0,0,1] = -i·Δε[0,0,-1]         ← sine: coefs[1]=i
+  Δε̃[0,0,1] = -i·Δε[0,0,1] = i·Δε[0,0,-1]          ← sine: coefs[1]=-i
 ```
 
 The chain reads as: "the real parameter Δε̃[0,0,1] equals i times the actual Fourier
@@ -298,7 +337,7 @@ Fourier coefficient is Δε[0,0,1] = 0.3/i = −0.3i.
 
 ```
 Z₁+Z₁: Δω ∈ -(ω/2ε)·{c₋·Δε̃[0,0,1], c₊·Δε̃[0,0,1]}
-  orbit: Δε̃[0,0,1] = i·Δε[0,0,1] = -i·Δε[0,0,-1]
+  orbit: Δε̃[0,0,1] = -i·Δε[0,0,1] = i·Δε[0,0,-1]
 ```
 
 **Example B: P4₂32 (sg=208), R-point, idx=1** (mixed cosine + sine orbits)
@@ -312,14 +351,14 @@ R₃+R₃: Δω ∈ -(ω/2ε) (L ± √D)/2
   ...
   orbits:
     Δε[1,1,0] = Δε[1,0,1] = ... = Δε[-1,-1,0]
-    Δε̃[1,1,1] = i·Δε[1,1,1] = -i·Δε[1,1,-1] = ... = -i·Δε[-1,-1,-1]
+    Δε̃[1,1,1] = -i·Δε[1,1,1] = i·Δε[1,1,-1] = ... = i·Δε[-1,-1,-1]
 ```
 
 **Example C: P4₁2₁2 (sg=92), R-point, idx=1** (cosine + general-phase orbits)
 
 ```
 R₁+R₁: Δω ∈ -(ω/2ε)·{c₋·Δε̃[0,0,1], c₊·Δε̃[0,0,1]}
-  orbit: Δε̃[0,0,1] = exp(-iπ/4)·Δε[0,0,1] = ...·Δε[0,0,-1]
+  orbit: Δε̃[1,0,1] = exp(-iπ/4)·Δε[1,0,1] = ...·Δε[-1,0,-1]
 ```
 
 (The [1,0,0] cosine orbit may also appear in some irreps; it would display without tilde.)
@@ -345,21 +384,25 @@ full_phases ./= p_c               # makes full_phases[1] = 1
 full_phases[conjugate] .*= p_c^2  # correction for conjugate members
 ```
 
-Must be changed to re-anchor so the common RHS is real. Compute the constraint phase
-α = phase(−b_canonical), then θ = angle(α)/2, and re-anchor to exp(iθ):
+Changed to re-anchor so the common RHS is real. The implementation (CP-A, DONE):
 ```julia
-p_c = full_phases[1]
-# find -b_canonical in full_bs, read its raw phase → compute α, θ
-# re-anchor so full_phases[1] = exp(iθ) (common RHS is real)
-full_phases ./= (p_c / exp(iθ))
-full_phases[conjugate] .*= ???  # conjugate correction needs re-derivation
+neg_b_can = ReciprocalPoint{D}(-parent(full_bs[1]))
+neg_idx = findfirst(b -> isapprox(b, neg_b_can, nothing, false; atol), full_bs)
+if neg_idx !== nothing && !conjugate[neg_idx]
+    α = full_phases[neg_idx] / full_phases[1]
+    θ = -angle(α) / 2
+else
+    θ = 0.0
+end
+anchor = cis(θ)
+s = full_phases[1] / anchor
+full_phases ./= s
+full_phases[conjugate] .*= s^2
 ```
 
-The conjugate-member correction `.*= p_c^2` was specific to the `coefs[1] = 1`
-convention. With the new convention this correction needs to be re-derived. The principle
-is unchanged: for conjugate members, the relation involves `conj(Δε[canonical])` rather
-than `Δε[canonical]`, so their coefs must be adjusted so that `coefs[i] · Δε[b_i] = Δε̃`
-still holds (with Δε̃ real). This should be straightforward but needs careful algebra.
+The conjugate-member correction `.*= s^2` generalizes the old `.*= p_c^2`. Proof: for
+conjugate members, the correct divisor is `conj(s)`, not `s`. Since `|s|=1`:
+`(x/s) · s² = x·s = x/conj(s)`. When θ=0, s=p_c and we recover the old correction.
 
 ### Code locations that assume `coefs[1] = 1`
 
@@ -433,7 +476,7 @@ Orbit: {(0,0,-1/2), (0,0,1/2)}  — 2 vectors
 One b-orbit:
 ```
 b = [0,0,1]:  {[0,0,1], [0,0,-1]} with phases {+1, -1}
-α = phase(-b_canonical) = -1  →  sine-like (θ = π/2)
+α = phase(-b_canonical) = -1  →  sine-like (θ = -arg(α)/2 = π/2 or -π/2)
 ```
 
 Irrep decomposition: Z₁ (d=2, M=2). Only one irrep, and it has multiplicity 2.

@@ -377,8 +377,8 @@ function b_vector_orbits(
         # Canonical selection: sort sg-orbit members and conjugate members in separate
         # groups (sg first), then apply _canonical_sort_key within each group.  Keeping
         # sg members first guarantees the canonical (index 1) is always a non-conjugate
-        # sg-orbit member, so the re-anchoring Δε[canonical]=1 is always a direct phase
-        # (not a conjugation).  The key prefers: zero components > positive > negative.
+        # sg-orbit member, so the re-anchoring is always a direct phase (not a conjugation).
+        # The key prefers: zero components > positive > negative.
         sg_idx  = findall(.!conjugate)
         co_idx  = findall(conjugate)
         perm    = [sg_idx[sortperm(full_bs[sg_idx]; by = _canonical_sort_key)];
@@ -387,9 +387,44 @@ function b_vector_orbits(
         full_phases = full_phases[perm]
         active      = active[perm]
         conjugate   = conjugate[perm]
-        p_c = full_phases[1]
-        full_phases ./= p_c               # re-anchor sg members: canonical has phase 1
-        full_phases[conjugate] .*= p_c^2  # fix conjugate members: need /conj(p_c) = *p_c
+
+        # Constraint phase: when -b_canonical is an sg-orbit member (not from reality
+        # closure), the space-group phases constrain Δε[canonical] to have a fixed complex
+        # phase θ_c, so it cannot be freely chosen as real. We re-anchor phases so the
+        # common orbit RHS  Δε̃ ≡ coefs[1]·Δε[canonical]  is always real.
+        #   α = phase(-b_can) / phase(b_can)   (constraint phase of the orbit)
+        #   θ = -arg(α)/2                       (half the negative constraint phase)
+        # Result:  coefs[1] = exp(iθ), and Δε[canonical] = Δε̃·exp(-iθ).
+        # The sign θ = -arg(α)/2 (not +) is required so that coefs[-b_k] = conj(coefs[b_k])
+        # for every paired (b_k, -b_k) in the orbit, which makes A real/Hermitian.
+        # Proof: p_{-k}/p_{-1} = conj(p_k/p_1) (conjugate representation for negated vectors),
+        # so coefs[-k] = p_{-k}/s and conj(coefs[k]) = conj(p_k/s) = conj(p_k)·s. These are
+        # equal iff cis(2θ) = conj(α), i.e. θ = -arg(α)/2.
+        # Special cases:  cosine (α=+1) → θ=0, coefs[1]=1  (old convention, unchanged)
+        #                 sine   (α=-1) → θ=-π/2, coefs[1]=-i  (either sign ok for real α)
+        # When -b_canonical is a conjugate member (added by reality closure, not by sg-BFS),
+        # there is no group-theoretic phase constraint and θ=0.
+        neg_b_can = ReciprocalPoint{D}(-parent(full_bs[1]))
+        neg_idx = findfirst(
+            b -> isapprox(b, neg_b_can, nothing, #=modw=# false; atol),
+            full_bs
+        )
+        if !isnothing(neg_idx) && !conjugate[neg_idx]
+            α = full_phases[neg_idx] / full_phases[1]
+            θ = -angle(α) / 2
+        else
+            θ = 0.0
+        end
+        anchor = cis(θ)
+
+        # Re-anchor: set coefs[1] = exp(iθ).
+        # For sg members: coefs[k] = raw_phase[k] / s, where s = raw_phase[1]/exp(iθ).
+        # For conjugate members: their raw phases derive from conj(sg_phase), so the correct
+        # divisor is conj(s), not s. The correction .*= s² achieves  /s → /conj(s)  when
+        # |s|=1 (since x/s · s² = x·s = x/conj(s)).
+        s = full_phases[1] / anchor
+        full_phases ./= s
+        full_phases[conjugate] .*= s^2
         # conjugate[1] is always false by construction; keep flip as a safety net.
         if conjugate[1]
             conjugate .= .!conjugate

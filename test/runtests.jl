@@ -13,5 +13,6 @@ using Test
         include("perturbation_theory/test_nonsymmorphic_phases_2d.jl")
         include("perturbation_theory/test_multiplicity.jl")
         include("perturbation_theory/test_p3_K.jl")
+        include("perturbation_theory/test_constraint_phase.jl")
     end
 end
