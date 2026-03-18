@@ -88,7 +88,7 @@ function _print_linform(io::IO, coefs, terms::AbstractVector{<:MultipletShiftTer
         abs(z) < _DATOL && continue
         b_str = join(round.(Int, parent(t.canonical_b)), ",")
         pfx, body = _coef_parts(z; is_first=!any_printed)
-        print(io, pfx, body, "Δε[", b_str, "]")
+        print(io, pfx, body, _Δε_sym(t.orbit_relations), "[", b_str, "]")
         any_printed = true
     end
     any_printed || print(io, "0")
@@ -119,7 +119,7 @@ function _show_doublet_1term(io::IO, term::MultipletShiftTerm)
             printstyled(io, string(round(c; digits=6)); color=:light_blue, bold=true)
             printstyled(io, "·"; color=:light_black)
         end
-        printstyled(io, "Δε[$b_str]"; color=:light_blue, bold=true)
+        printstyled(io, _Δε_sym(term.orbit_relations), "[$b_str]"; color=:light_blue, bold=true)
     end
     printstyled(io, "}"; color=:light_blue, bold=true)
 end

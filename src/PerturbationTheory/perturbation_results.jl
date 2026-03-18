@@ -176,14 +176,19 @@ function _show(io::IO, t::ShiftTerm; omit_sign=false)
         end
     end
 
-    # print which Fourier component Δε[b] this term corresponds to
+    # print which Fourier component Δε[b] (or Δε̃[b] for non-cosine orbits) this term is
     b_str = join(round.(parent(t.canonical_b); digits=6), ", ")
     canonical_b_int = round.(Int, parent(t.canonical_b))
     t.canonical_b ≈ canonical_b_int || error("canonical_b is not integer-valued")
     b_str = join(canonical_b_int, ",")
-    print(io, "Δε[", b_str, "]")
+    print(io, _Δε_sym(t.orbit_relations), "[", b_str, "]")
 end
 Base.show(io::IO, t::ShiftTerm) = _show(io, t; omit_sign=false)
+
+# Returns "Δε" for cosine orbits (coefs[1] ≈ 1) or "Δε̃" for non-cosine orbits where the
+# constraint phase forces Δε[canonical] to be complex and the user-facing parameter Δε̃ is
+# the real common RHS of the orbit relation.
+_Δε_sym(or::OrbitRelations) = isapprox(or.coefs[1], 1.0; atol=1e-8) ? "Δε" : "Δε\u0303"
 
 # Format a b-vector as an integer-valued string "[i,j,...]".
 function _b_label(b::ReciprocalPoint)
@@ -234,6 +239,8 @@ end
 function _phase_prefix(z::ComplexF64)
     isapprox(z,  1.0; atol=1e-8) && return ""
     isapprox(z, -1.0; atol=1e-8) && return "-"
+    isapprox(z,  im;  atol=1e-8) && return "i·"
+    isapprox(z, -im;  atol=1e-8) && return "-i·"
     φ = mod(angle(z) / (2π), 1.0)
     φ_frac = rationalize(φ; tol=1e-8) # = p/q
     p, q = numerator(φ_frac), denominator(φ_frac)
@@ -246,31 +253,46 @@ end
 # Print the orbit of `rels` as a chain of equalities on a single line.
 #
 # Visual conventions:
-#   - Canonical (i=1): always plain "Δε[b]", bold; it is the reference treated as real
-#   - Active non-conjugate: caller's styling, plain "Δε[b]"
+#   - Canonical (i=1): "Δε[b]" (cosine) or "Δε̃[b]" (non-cosine); bold, reference value
+#   - Active non-conjugate: caller's styling, plain "Δε[b]" with phase prefix
 #   - Active conjugate: caller's styling, "Δε†[b]" with prefix from conj(coef)
 #   - Inactive: :light_red color; "Δε†" if conjugate, "Δε" otherwise
 #
-# For conjugate members the displayed relation is  conj(coef) · Δε†[b] = Δε[canonical],
-# valid when Δε[canonical] is real (the assumption throughout `evaluate`).
+# For non-cosine orbits (coefs[1] ≠ 1), the chain displays:
+#   Δε̃[b₁] = coefs[1]·Δε[b₁] = coefs[2]·Δε[b₂] = ...
+# showing the real parameter Δε̃ and its relation to the actual Fourier coefficients.
+#
+# For conjugate members the displayed relation is  conj(coef) · Δε†[b] = Δε̃,
+# using Δε̃ real throughout `evaluate`.
 function _print_orbit_chain(io::IO, rels::OrbitRelations; styling_kws...)
+    is_cosine = isapprox(rels.coefs[1], 1.0; atol=1e-8)
+    Δε_sym = is_cosine ? "Δε" : "Δε\u0303"
+
+    if !is_cosine
+        # Non-cosine: print "Δε̃[b₁]" as the LHS, then show all members with phase prefixes
+        b1 = rels.orbit[1]
+        active1 = rels.active[1]
+        kws1 = active1 ? (styling_kws..., bold=true, color=:normal) : (color=:light_red, bold=true)
+        printstyled(io, Δε_sym, _b_label(b1); kws1...)
+    end
+
     for (i, (b, c, active, conj_rel)) in
             enumerate(zip(rels.orbit, rels.coefs, rels.active, rels.conjugate))
-        i ≠ 1 && printstyled(io, " = "; styling_kws...)
-        if i == 1
-            # Canonical: always plain Δε, coef=1 so prefix is empty; bold to stand out
+        if is_cosine && i == 1
+            # Cosine canonical: plain "Δε[b]", no prefix (coefs[1]=1); bold
             kws = active ? (styling_kws..., bold=true, color=:normal) : (color=:light_red, bold=true)
             printstyled(io, "Δε", _b_label(b); kws...)
-        elseif conj_rel
-            # Conjugate (reality-closure) member: relation is conj(c) · Δε†[b] = Δε[canonical]
-            pfx = _phase_prefix(conj(c))
-            kws = active ? styling_kws : (color=:light_red,)
-            printstyled(io, pfx, "Δε†", _b_label(b); kws...)
         else
-            # Plain phase relation: c · Δε[b] = Δε[canonical]
-            pfx = _phase_prefix(c)
+            # All other members (and all members for non-cosine): show " = prefix·Δε[b]"
+            printstyled(io, " = "; styling_kws...)
             kws = active ? styling_kws : (color=:light_red,)
-            printstyled(io, pfx, "Δε", _b_label(b); kws...)
+            if conj_rel
+                pfx = _phase_prefix(conj(c))
+                printstyled(io, pfx, "Δε†", _b_label(b); kws...)
+            else
+                pfx = _phase_prefix(c)
+                printstyled(io, pfx, "Δε", _b_label(b); kws...)
+            end
         end
     end
 end
@@ -377,7 +399,7 @@ function Base.show(io::IO, t::MultipletShiftTerm)
     M = size(t.coefficient, 1)
     b_int = (round(Int, x) for x in parent(t.canonical_b))
     b_str = join(b_int, ",")
-    print(io, "$M×$M matrix · Δε[$b_str]")
+    print(io, "$M×$M matrix · ", _Δε_sym(t.orbit_relations), "[$b_str]")
 end
 
 # ──────────────────────────────────────────────────────────────────────────────────────── #
@@ -445,7 +467,7 @@ function Base.show(io::IO, e::MultipletShiftExpr)
     for (k, t) in enumerate(e.terms)
         k > 1 && printstyled(io, " + "; color=:light_blue)
         b_str = _b_label(t.canonical_b)
-        print(io, "A", _subscript(k), "·Δε", b_str)
+        print(io, "A", _subscript(k), "·", _Δε_sym(t.orbit_relations), b_str)
     end
     printstyled(io, ")"; color=:light_blue)
     return nothing
@@ -467,7 +489,7 @@ function Base.show(io::IO, ::MIME"text/plain", e::MultipletShiftExpr)
         b_str = _b_label(t.canonical_b)
         mat_str = _format_matrix_inline(t.coefficient)
         print(io, "\n    A", _subscript(k))
-        printstyled(io, "@Δε", b_str, " "; color=:light_black)
+        printstyled(io, "@", _Δε_sym(t.orbit_relations), b_str, " "; color=:light_black)
         print(io, "= ", mat_str)
     end
     # Orbits block

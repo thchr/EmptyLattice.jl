@@ -84,12 +84,12 @@ using EmptyLattice.PerturbationTheory   # also exports ReciprocalPoint
 
         # Orbit chain: canonical first, then coef-prefixed members
         # coef=-1  → prefix "-"
-        # coef=+i  → exp(2πi·1/4) → prefix "exp(2πi·1/4)·"
-        # coef=-i  → exp(2πi·3/4) → prefix "exp(2πi·3/4)·"
+        # coef=+i  → prefix "i·"
+        # coef=-i  → prefix "-i·"
         @test occursin("orbit:",       str)
         @test occursin("Δε[1,0,1]",   str)   # canonical appears in chain
         @test occursin("-Δε[-1,0,1]", str)   # phase=-1
-        @test occursin("exp(2πi·1/4)·Δε[0,1,1]",  str)
-        @test occursin("exp(2πi·3/4)·Δε[0,-1,1]", str)
+        @test occursin("i·Δε[0,1,1]",  str)
+        @test occursin("-i·Δε[0,-1,1]", str)
     end
 end
