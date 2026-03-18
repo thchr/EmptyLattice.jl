@@ -166,7 +166,7 @@ end
 
 """
     frequency_shifts(
-        lgirsAbstractVector{<:LGIrrep{D}},
+        lgirs::AbstractVector{<:LGIrrep{D}},
         Gs::ReciprocalBasis{D},
         [degeneracy_idx=1];
         polarization=nothing,
@@ -353,7 +353,7 @@ end
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 
 """
-    plot_dielectric(orbits, Δεs [, Gs_or_Rs]; npoints=101, ncontours=10, kwargs...) -> Figure
+    plot_dielectric(orbits, Δεs [, Gs_or_Rs]; npoints=101, levels=10, kwargs...) -> Figure
 
 Visualize the real-space dielectric perturbation
 ```
@@ -379,7 +379,7 @@ plot_dielectric(ors, [Δε₁, Δε₂, ...], Gs)       # one Δεₖ per orbit
 
 # Keyword arguments
 - `npoints::Int = 101`: grid resolution (npoints × npoints)
-- `ncontours::Int = 10`: contour levels forwarded to `contourf`
+- `levels::Int = 10`: contour levels forwarded to `contourf`
 - remaining `kwargs` forwarded to `contourf!`
 
 Requires a Makie backend (e.g. `using GLMakie`) to be loaded.
@@ -387,7 +387,7 @@ Requires a Makie backend (e.g. `using GLMakie`) to be loaded.
 function plot_dielectric end
 
 """
-    plot_dielectric!(ax, orbits, Δεs [, Gs_or_Rs]; npoints=101, ncontours=10, kwargs...)
+    plot_dielectric!(ax, orbits, Δεs [, Gs_or_Rs]; npoints=101, levels=10, kwargs...)
 
 In-place version of [`plot_dielectric`](@ref): plots into an existing Makie `Axis` `ax`.
 Returns the `contourf` plot object.

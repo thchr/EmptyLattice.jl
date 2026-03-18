@@ -16,7 +16,7 @@ Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 EmptyLatticeMakieExt = "Makie"
 
 [compat]
-Crystalline = "0.6.23"
+Crystalline = "0.6.24"
 Makie = "0.21"
 julia = "1.10"
 

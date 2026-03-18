@@ -51,22 +51,24 @@ function plot_dielectric!(
     Δεs        :: AbstractVector{<:Real},
     Gs_or_Rs   :: Union{ReciprocalBasis{2}, DirectBasis{2}, Nothing} = nothing;
     npoints    :: Int = 101,
-    ncontours  :: Int = 10,
-    kwargs...
+    levels = 10,
+    colormap   :: Symbol = :balance,
+    kws...
 )
     xs = ys = range(-0.5, 0.5; length = npoints)
     field = _dielectric_field(orbits, Δεs, xs, ys)
-
+    #colorrange = maximum(abs, field) .* (-1, 1) # symmetric limits, to place 0 @ center
+    # (TODO: toggle and pass to `contourf!` when fixed in Makie; see https://github.com/MakieOrg/Makie.jl/pull/5330)
     Rs = _to_Rs(Gs_or_Rs)
     if isnothing(Rs)
-        return contourf!(ax, xs, ys, field; levels = ncontours, kwargs...)
+        return contourf!(ax, xs, ys, field; levels, colormap, kws...)
     else
         # Build curvilinear Cartesian coordinate matrices from the fractional grid.
         # r_cart = Rm * r_frac  =>  xs_c[ix,iy] = Rm[1,1]*xs[ix] + Rm[1,2]*ys[iy]
         Rm   = stack(Rs)   # 2×2, columns = a₁, a₂ in Cartesian
         xs_c = [Rm[1,1]*x + Rm[1,2]*y for x in xs, y in ys]
         ys_c = [Rm[2,1]*x + Rm[2,2]*y for x in xs, y in ys]
-        return contourf!(ax, xs_c, ys_c, field; levels = ncontours, kwargs...)
+        return contourf!(ax, xs_c, ys_c, field; levels, colormap, kws...)
     end
 end
 
@@ -75,12 +77,12 @@ end
 # ─────────────────────────────────────────────────────────────────────────────── #
 
 function plot_dielectric(
-    orbits     :: AbstractVector{<:OrbitRelations{2}},
-    Δεs        :: AbstractVector{<:Real},
-    Gs_or_Rs   :: Union{ReciprocalBasis{2}, DirectBasis{2}, Nothing} = nothing;
-    npoints      :: Int  = 101,
-    ncontours    :: Int  = 10,
-    colorbar     :: Bool = true,
+    orbits   :: AbstractVector{<:OrbitRelations{2}},
+    Δεs      :: AbstractVector{<:Real},
+    Gs_or_Rs :: Union{ReciprocalBasis{2}, DirectBasis{2}, Nothing} = nothing;
+    npoints  :: Int  = 101,
+    levels = 10,
+    colorbar :: Bool = true,
     figure_kws   = (;),
     axis_kws     = (;),
     colorbar_kws = (;),
@@ -88,10 +90,10 @@ function plot_dielectric(
 )
     fig = Figure(; figure_kws...)
     ax  = Axis(fig[1, 1]; aspect = DataAspect(), axis_kws...)
-    plt = plot_dielectric!(ax, orbits, Δεs, Gs_or_Rs; npoints, ncontours, kwargs...)
+    plt = plot_dielectric!(ax, orbits, Δεs, Gs_or_Rs; npoints, levels, kwargs...)
     hidedecorations!(ax)
     if colorbar
-        cb_kws = merge((label = "Δε(𝐫)", width = 7, height = 100), colorbar_kws)
+        cb_kws = merge((label = "Δε(𝐫)", ), colorbar_kws)
         Colorbar(fig[1, 2], plt; cb_kws...)
     end
     return fig
