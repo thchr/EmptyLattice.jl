@@ -121,31 +121,35 @@ end
     @testset "conjugate-pair consistency" begin
         for (sgnum, klabel) in [(17, "Z"), (92, "R"), (208, "R")]
             es = _setup_3d(sgnum, klabel, 1)
-            for e in es, t in e.terms
-                rels = t.orbit_relations
-                n = length(rels.orbit)
-                for i in 1:n
-                    bi = parent(rels.orbit[i])
-                    # Find −b_i in the orbit
-                    j = findfirst(1:n) do k
-                        isapprox(parent(rels.orbit[k]), -bi; atol=1e-10)
+            for e in es
+                for t in e.terms
+                    rels = t.orbit_relations
+                    n = length(rels.orbit)
+                    for i in 1:n
+                        bi = parent(rels.orbit[i])
+                        # Find −b_i in the orbit
+                        j = findfirst(1:n) do k
+                            isapprox(parent(rels.orbit[k]), -bi; atol=1e-10)
+                        end
+                        @test j !== nothing
+                        # coefs[-b] = conj(coefs[b])
+                        @test rels.coefs[j] ≈ conj(rels.coefs[i])
                     end
-                    @test j !== nothing
-                    # coefs[-b] = conj(coefs[b])
-                    @test rels.coefs[j] ≈ conj(rels.coefs[i])
                 end
             end
         end
     end
 
-    # ── Regression: cosine orbits still have coefs[1] ≈ 1 ─────────────────────── #
+    # ── Regression: cosine-like orbits still have coefs[1] ≈ 1 ────────────────── #
     @testset "cosine orbits unchanged" begin
-        # pm3m (sg=221) X-point: symmorphic, all cosine
-        Gs = dualbasis(primitivize(directbasis(221, Val(3)), centering(221, 3)))
-        lgirs = primitivize(lgirreps(221, Val(3))["X"])
+        # Pm-3m (sg=221) X-point: symmorphic, all "cosine-like"
+        Gs = dualbasis(directbasis(221, Val(3))) # already primitive & fully fixed by `directbasis`
+        lgirs = lgirreps(221, Val(3))["X"]
         es = frequency_shifts(lgirs, Gs, 1)
-        for e in es, t in e.terms
-            @test isapprox(t.orbit_relations.coefs[1], 1.0; atol=1e-8)
+        for e in es
+            for t in e.terms
+                @test isapprox(t.orbit_relations.coefs[1], 1.0; atol=1e-8)
+            end
         end
     end
 

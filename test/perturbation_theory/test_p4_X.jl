@@ -21,10 +21,9 @@ using EmptyLattice
 using EmptyLattice.PerturbationTheory
 
 @testset "p4 X-point (TM and TE)" begin
-    sgnum = 10  # plane group p4
-    D = 2
+    D, sgnum = 2, 10  # plane group p4
 
-    Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+    Rs = directbasis(sgnum, Val(D)) # already primitive and fully fixed by `directbasis`
     Gs = dualbasis(Rs)
 
     lgirsd = lgirreps(sgnum, Val(D))

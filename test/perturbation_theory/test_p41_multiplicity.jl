@@ -23,20 +23,19 @@ using EmptyLattice
 using EmptyLattice.PerturbationTheory
 
 @testset "P4₁ A-point (3D): M=4 MultipletShiftExpr" begin
-    sgnum = 76; D = 3
+    D, sgnum = 3, 76
 
-    # Fix lattice: a=b=1, c=1 tetragonal (a/c=1)
-    Rs = DirectBasis{3}(SVector(1.0, 0.0, 0.0),
-                        SVector(0.0, 1.0, 0.0),
-                        SVector(0.0, 0.0, 1.0))
+    # Fix lattice: a=b=1, c=1 tetragonal (a/c=1): a/c=1 intentionally for more degeneracy
+    Rs = crystal(1.0, 1.0, 1.0, π/2, π/2, π/2)
     Gs = dualbasis(Rs)
 
     lgirs_A = lgirreps(sgnum, Val(D))["A"]
     @test length(lgirs_A) == 4
 
+    es = frequency_shifts(lgirs_A, Gs, 1)
+    eA1 = only(e for e in es if label(e.lgir) == "A₁")
     # ── frequency_shifts ─────────────────────────────────────────────────────────── #
     @testset "structure: M=4 for all irreps, 4 b-orbit terms" begin
-        es = frequency_shifts(lgirs_A, Gs, 1)
 
         @test length(es) == 4
         @test all(e -> e isa MultipletShiftExpr{3}, es)
@@ -52,9 +51,6 @@ using EmptyLattice.PerturbationTheory
 
     # ── coefficient matrices (regression) ────────────────────────────────────────── #
     @testset "coefficient matrix regression (A₁ irrep)" begin
-        es  = frequency_shifts(lgirs_A, Gs, 1)
-        eA1 = only(e for e in es if label(e.lgir) == "A₁")
-
         # term 1 (b=[-1,0,0]): diagonal with two non-trivial entries
         A1 = eA1.terms[1].coefficient
         @test A1 ≈ Hermitian(A1)              # Hermitian by construction
@@ -78,8 +74,6 @@ using EmptyLattice.PerturbationTheory
 
     # ── evaluate ─────────────────────────────────────────────────────────────────── #
     @testset "evaluate returns 4 eigenvalues per irrep" begin
-        es  = frequency_shifts(lgirs_A, Gs, 1)
-        eA1 = only(e for e in es if label(e.lgir) == "A₁")
         b1, b2, b3, b4 = (t.canonical_b for t in eA1.terms)
         Δε = Dict(b1 => 0.3, b2 => 0.2, b3 => 0.1, b4 => 0.15)
         result = evaluate(es, Δε)
@@ -100,9 +94,6 @@ using EmptyLattice.PerturbationTheory
 
     # ── display ──────────────────────────────────────────────────────────────────── #
     @testset "display (smoke test)" begin
-        es  = frequency_shifts(lgirs_A, Gs, 1)
-        eA1 = only(e for e in es if label(e.lgir) == "A₁")
-
         # compact show: should contain "A₁·Δε" style labels
         buf = IOBuffer()
         show(buf, eA1)

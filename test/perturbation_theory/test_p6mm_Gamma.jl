@@ -26,10 +26,9 @@ using EmptyLattice
 using EmptyLattice.PerturbationTheory
 
 @testset "p6mm Γ-point (TM): degeneracy_idx selection" begin
-    sgnum = 17  # plane group p6mm
-    D = 2
+    D, sgnum = 2, 17  # plane group p6mm
 
-    Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+    Rs = directbasis(sgnum, Val(D)) # already primitive, and fully fixed by `directbasis`
     Gs = dualbasis(Rs)
 
     lgirs_Γ = lgirreps(sgnum, Val(D))["Γ"]

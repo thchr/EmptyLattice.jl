@@ -34,7 +34,7 @@ using EmptyLattice.PerturbationTheory
     # ── P̄1 (sgnum=2, 3D), X=[½,0,0] ─────────────────────────────────────────────── #
     @testset "P̄1 (sgnum=2, 3D), X-point: M=2 doublets" begin
         sgnum = 2; D = 3
-        Rs    = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+        Rs    = crystal(1.0, .7, 1.2, 1.3, 1.7, 1.9) # fixed lattice to avoid RNG dependence
         Gs    = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["X"]
 
@@ -67,7 +67,7 @@ using EmptyLattice.PerturbationTheory
         @test isapprox(real(A_minus),  I(2); atol=1e-10)
 
         # evaluate: for Δε[1,0,0] = 0.5, both shifts within each doublet are equal
-        Δε = Dict(SVector(1.0, 0.0, 0.0) => 0.5)
+        Δε = Dict([1, 0, 0] => 0.5)
         shifts = evaluate(es, Δε)
         @test shifts isa Dict{String, Vector{Float64}}
 
@@ -88,7 +88,7 @@ using EmptyLattice.PerturbationTheory
     # ── p2mg (sgnum=7, 2D), S=[½,½], TM ──────────────────────────────────────────── #
     @testset "p2mg (sgnum=7, 2D), S-point TM: Tr(W)=0 from non-symmorphic phases" begin
         sgnum = 7; D = 2
-        Rs   = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+        Rs   = crystal(1, .8, π/2) # fixed lattice to avoid RNG dependence
         Gs   = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["S"]
 
@@ -125,7 +125,7 @@ using EmptyLattice.PerturbationTheory
     # ── p6mm (sgnum=17, 2D), K-point, TM: full-SG orbit fix ──────────────────────── #
     @testset "p6mm (sgnum=17, 2D) K-point TM: Hermitian A from full-SG orbit" begin
         sgnum = 17; D = 2
-        Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+        Rs = directbasis(sgnum, Val(D)) # NB: already no-RNG dependence in plane group 17
         Gs = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["K"]
 

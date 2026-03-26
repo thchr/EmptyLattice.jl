@@ -24,8 +24,9 @@ using EmptyLattice
 using EmptyLattice.PerturbationTheory   # also exports ReciprocalPoint
 
 @testset "P4₁ (sgnum=76) non-symmorphic orbit phases" begin
-    sgnum = 76; D = 3
-    Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+    D, sgnum = 3, 76
+
+    Rs = crystal(1.0, 1.0, .9, π/2, π/2, π/2) # fixed lattice to avoid RNG of `directbasis`
     Gs = dualbasis(Rs)
     lgirs = lgirreps(sgnum, Val(D))["A"]
     kv    = position(lgirs[1])()

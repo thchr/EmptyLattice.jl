@@ -25,10 +25,9 @@ using EmptyLattice
 using EmptyLattice.PerturbationTheory
 
 @testset "Pm-3m X-point (3D): degeneracy_idx=1" begin
-    sgnum = 221  # Pm-3m
-    D = 3
+    D, sgnum = 3, 221  # Pm-3m
 
-    Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+    Rs = directbasis(sgnum, Val(D)) # already primitive and fully fixed by `directbasis`
     Gs = dualbasis(Rs)
 
     lgirs_X = lgirreps(sgnum, Val(D))["X"]

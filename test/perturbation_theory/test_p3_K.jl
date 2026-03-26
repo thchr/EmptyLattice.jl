@@ -28,11 +28,9 @@ using EmptyLattice
 using EmptyLattice.PerturbationTheory
 
 @testset "p3 K-point (2D): conjugate orbit members" begin
-    sgnum = 13; D = 2
+    D, sgnum = 2, 13
 
-    # Explicit hexagonal primitive basis (a=1, γ=120°) to avoid dependence on
-    # directbasis()'s free-parameter defaults (which can vary across versions).
-    Rs = DirectBasis{2}(SVector(1.0, 0.0), SVector(-0.5, sqrt(3)/2))
+    Rs = directbasis(sgnum, Val(2)) # already primitive, and fully fixed by `directbasis`
     Gs = dualbasis(Rs)
     lgirs = lgirreps(sgnum, Val(D))["K"]
     @test length(lgirs) == 3

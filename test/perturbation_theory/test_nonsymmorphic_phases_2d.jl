@@ -39,15 +39,15 @@ end
     # ── Plane group 7 (p2mg), k=S ─────────────────────────────────────────────── #
     @testset "p2mg (sgnum=7) k=S: [1,1] orbit phases" begin
         sgnum = 7; D = 2
-        Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+        Rs = crystal(1, .9, π/2) # fixed lattice to avoid RNG dependence from `directbasis`
         Gs = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["S"]
-        kv    = position(lgirs[1])()
+        kv = position(lgirs[1])()
 
         _, kvGsv = unique_spectrum(kv, Gs; Nfreq=1)
         orbit = kvGsv[1]
 
-        sg_prim  = primitivize(spacegroup(sgnum, Val(D)))
+        sg_prim = primitivize(spacegroup(sgnum, Val(D)))
         b_orbits = b_vector_orbits(orbit, sg_prim)
 
         # Canonical: fewest negatives → [1,1] (positive components, fewest negatives)
@@ -73,11 +73,11 @@ end
 
     # ── Plane group 12 (p4gm), k=M, Nfreq=2 ──────────────────────────────────── #
     @testset "p4gm (sgnum=12) k=M Nfreq=2: [2,1] orbit phases" begin
-        sgnum = 12; D = 2
-        Rs = primitivize(directbasis(sgnum, Val(D)), centering(sgnum, D))
+        sgnum = 12; D = 2 # [NB: already primitive, and fixed unit cell from `directbasis`]
+        Rs = directbasis(sgnum, Val(D))
         Gs = dualbasis(Rs)
         lgirs = lgirreps(sgnum, Val(D))["M"]
-        kv    = position(lgirs[1])()
+        kv = position(lgirs[1])()
 
         _, kvGsv = unique_spectrum(kv, Gs; Nfreq=2)
 
