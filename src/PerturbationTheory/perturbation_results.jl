@@ -531,8 +531,9 @@ end
 # evaluate
 # ──────────────────────────────────────────────────────────────────────────────────────── #
 
+
 """
-    evaluate(es::Collection{<:IrrepShiftExpr}, Δε_fourier::Dict, ε=1.0; atol=1e-10)
+    evaluate(es::Collection{<:IrrepShiftExpr}, Δε_fourier::Dict, ε=1.0)
         -> Dict{String, Float64}
 
 Evaluate the symbolic frequency-shift expressions in `es` at specific Fourier components
@@ -548,26 +549,23 @@ The first-order shift for irrep α is:
 Δω_α = -(ω / 2ε) Σ_{orbit [b]} A_{α,[b]} · Δε[canonical_b]
 ```
 where `A_{α,[b]}` is `term.coefficient` for the matching `ShiftTerm`.
-
-b-vector matching uses `atol` for approximate equality.
 """
 function evaluate(
     es          :: Collection{<:IrrepShiftExpr},
     Δε_fourier  :: Dict,
-    ε           :: Real = 1.0;
-    atol        :: Real = 1e-10,
+    ε           :: Real = 1.0
 )
     isempty(es) && error("cannot evaluate an empty Collection{IrrepShiftExpr}")
     ω = first(es).ω
     result = Dict{String, Float64}()
-    for irrse in es
+    for e in es
         Δω = 0.0
-        for term in irrse.terms
-            Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b); atol)
-            Δε_b === nothing && continue
+        for term in e.terms
+            b = parent(term.canonical_b)
+            Δε_b = _lookup_b(Δε_fourier, b)
             Δω += Δε_b * term.coefficient
         end
-        result[label(irrse.lgir)] = -(ω / (2ε)) * Δω
+        result[label(e.lgir)] = -(ω / (2ε)) * Δω
     end
     return result
 end
@@ -577,32 +575,29 @@ end
 function evaluate(
     e           :: IrrepShiftExpr,
     Δε_fourier  :: Dict,
-    ε           :: Real = 1.0;
-    atol        :: Real = 1e-10,
+    ε           :: Real = 1.0
 )
     Δω = 0.0
     for term in e.terms
-        Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b); atol)
-        Δε_b === nothing && continue
+        Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b))
         Δω += Δε_b * term.coefficient
     end
     return [-(e.ω / (2ε)) * Δω]
 end
 
 # Compute the orbit-summed perturbation matrix W for a multiplet expression.
-function _eval_W_matrix(terms::Vector{<:MultipletShiftTerm}, Δε_fourier::Dict, ω::Real, ε::Real; atol)
+function _eval_W_matrix(terms::Vector{<:MultipletShiftTerm}, Δε_fourier::Dict, ω::Real, ε::Real)
     M = size(first(terms).coefficient, 1)
     W = zeros(ComplexF64, M, M)
     for term in terms
-        Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b); atol)
-        Δε_b === nothing && continue
+        Δε_b = _lookup_b(Δε_fourier, parent(term.canonical_b))
         W .+= Δε_b .* term.coefficient
     end
     return -(ω / (2ε)) .* W
 end
 
 """
-    evaluate(e::DoubletShiftExpr, Δε_fourier::Dict, ε=1.0; atol=1e-10) -> Vector{Float64}
+    evaluate(e::DoubletShiftExpr, Δε_fourier::Dict, ε=1.0) -> Vector{Float64}
 
 Evaluate the two first-order frequency shifts for a doublet (M=2) irrep analytically.
 Returns a length-2 vector of shifts sorted in ascending order.
@@ -610,11 +605,10 @@ Returns a length-2 vector of shifts sorted in ascending order.
 function evaluate(
     e           :: DoubletShiftExpr,
     Δε_fourier  :: Dict,
-    ε           :: Real = 1.0;
-    atol        :: Real = 1e-10,
+    ε           :: Real = 1.0
 )
     isempty(e.terms) && return [0.0, 0.0]
-    W = _eval_W_matrix(e.terms, Δε_fourier, e.ω, ε; atol)
+    W = _eval_W_matrix(e.terms, Δε_fourier, e.ω, ε)
     # Analytical eigenvalues of 2×2 Hermitian W = [a c; c* d] (a,d real):
     #   λ₁₂ = (a+d)/2 ± √((a-d)²/4 + |c|²)
     a, d = real(W[1,1]), real(W[2,2])
@@ -624,7 +618,7 @@ function evaluate(
 end
 
 """
-    evaluate(e::MultipletShiftExpr, Δε_fourier::Dict, ε=1.0; atol=1e-10) -> Vector{Float64}
+    evaluate(e::MultipletShiftExpr, Δε_fourier::Dict, ε=1.0) -> Vector{Float64}
 
 Evaluate the M first-order frequency shifts for a multiplet (M>2) irrep numerically.
 Returns a length-M vector of shifts sorted in ascending order.
@@ -632,16 +626,15 @@ Returns a length-M vector of shifts sorted in ascending order.
 function evaluate(
     e           :: MultipletShiftExpr,
     Δε_fourier  :: Dict,
-    ε           :: Real = 1.0;
-    atol        :: Real = 1e-10,
+    ε           :: Real = 1.0
 )
     isempty(e.terms) && return zeros(Float64, e.M)
-    W = _eval_W_matrix(e.terms, Δε_fourier, e.ω, ε; atol)
+    W = _eval_W_matrix(e.terms, Δε_fourier, e.ω, ε)
     return eigvals(Hermitian(W))
 end
 
 """
-    evaluate(es::Collection{<:AbstractShiftExpr}, Δε_fourier::Dict, ε=1.0; atol=1e-10)
+    evaluate(es::Collection{<:AbstractShiftExpr}, Δε_fourier::Dict, ε=1.0)
         -> Dict{String, Vector{Float64}}
 
 Evaluate frequency shifts for a mixed collection (may contain irreps of any multiplicity).
@@ -651,25 +644,27 @@ length M for M>1). Shifts are sorted in ascending order within each entry.
 function evaluate(
     es          :: Collection{<:AbstractShiftExpr},
     Δε_fourier  :: Dict,
-    ε           :: Real = 1.0;
-    atol        :: Real = 1e-10,
+    ε           :: Real = 1.0
 )
     isempty(es) && error("cannot evaluate an empty Collection{<:AbstractShiftExpr}")
     result = Dict{String, Vector{Float64}}()
     for e in es
-        result[label(e.lgir)] = evaluate(e, Δε_fourier, ε; atol)
+        result[label(e.lgir)] = evaluate(e, Δε_fourier, ε)
     end
     return result
 end
 
+# tolerance for matching b-vectors across Δε_fourier and input `es` in `_lookup_b`
+const B_VEC_LOOKUP_ATOL = 1e-10
+
 # Find Δε value for a given b-vector, tolerating different container types for the key
 # (ReciprocalPoint, SVector, Vector, Tuple, etc.).
-function _lookup_b(dict::Dict, b::AbstractVector; atol)
+function _lookup_b(dict::Dict, b::AbstractVector; atol = B_VEC_LOOKUP_ATOL)
     n  = length(b)
     bv = collect(Float64, b)
     for (k, v) in dict
         length(k) == n || continue
         isapprox(collect(Float64, k), bv; atol) && return v
     end
-    return nothing
+    error("canonical orbit $b not included in Δε_fourier input dictionary: all canonical orbit coefficients must be specified for evaluation")
 end
