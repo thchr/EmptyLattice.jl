@@ -68,10 +68,10 @@ julia> lgirs = lgirreps(sgnum, Val(D))["M"]   # irreps at M = [½, ½]
 julia> degeneracy_idx = 1 # which "degeneracy bundle" in the empty lattice to consider (1 = lowest)
 julia> es = frequency_shifts(lgirs, Gs, degeneracy_idx; polarization=:TM)
 4-element Collection{IrrepShiftExpr{2}} (TM, ω ≈ 0.7071):
-M₁: Δω = -(ω/2ε) (2Δε[1,0] + Δε[1,1])
-M₂: Δω = -(ω/2ε) (-2Δε[1,0] + Δε[1,1])
-M₃: Δω = -(ω/2ε) (-Δε[1,1])
-M₄: Δω = -(ω/2ε) (-Δε[1,1])
+ M₁: Δω = -(ω/2ε) (2Δε[1,0] + Δε[1,1])
+ M₂: Δω = -(ω/2ε) (-2Δε[1,0] + Δε[1,1])
+ M₃: Δω = -(ω/2ε) (-Δε[1,1])
+ M₄: Δω = -(ω/2ε) (-Δε[1,1])
 
 # inspect a single shift for more info
 julia> es[1]

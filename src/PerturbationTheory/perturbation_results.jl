@@ -509,7 +509,11 @@ function Base.show(io::IO, ::MIME"text/plain", es::Collection{<:AbstractShiftExp
     ω = first(es).ω
     println(io, " (", pol_str, "ω ≈ ", round(ω; digits=4), "):")
     for (i, e) in enumerate(es)
-        show(io, e)
+        s = sprint(show, e; context=:color=>true)
+        _io = IOBuffer(s)
+        for l in eachline(_io; keep=true)
+            print(io, " ", l)
+        end
         i ≠ length(es) && println(io)
     end
 end
