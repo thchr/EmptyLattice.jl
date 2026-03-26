@@ -1,4 +1,6 @@
-# EmptyLattice
+# EmptyLattice.jl
+
+[![Build status][ci-status-img]][ci-status-url] [![Coverage][coverage-img]][coverage-url]
 
 Tools to compute photonic empty-lattice dispersion diagrams and associated symmetry properties (i.e., irreps).
 
@@ -109,3 +111,14 @@ julia> plot_dielectric(os, [Δε₁₀, Δε₁₁], Rs) # contourf over the 2D 
 <div align="center">
 <img src="assets/p4-dielectric-perturbation.png" alt="Dielectric perturbation for ε₁₀ = 0.2 & Δε₁₁ = 0.1 in plane group <it>p</it>4" width="400"/>
 </div>
+
+
+
+[ci-status-img]:   https://github.com/thchr/EmptyLattice.jl/workflows/CI/badge.svg
+[ci-status-url]:   https://github.com/thchr/EmptyLattice.jl/actions
+[docs-dev-img]:    https://img.shields.io/badge/docs-dev-blue.svg
+[docs-dev-url]:    https://thchr.github.io/SymmetricTightBinding.jl/dev
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://thchr..github.io/SymmetricTightBinding.jl/stable
+[coverage-img]:    https://codecov.io/gh/thchr/EmptyLattice.jl/branch/main/graph/badge.svg
+[coverage-url]:    https://codecov.io/gh/thchr/EmptyLattice.jl
