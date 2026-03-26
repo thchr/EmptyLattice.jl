@@ -120,5 +120,5 @@ julia> plot_dielectric(os, [Δε₁₀, Δε₁₁], Rs) # contourf over the 2D 
 [docs-dev-url]:    https://thchr.github.io/SymmetricTightBinding.jl/dev
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
 [docs-stable-url]: https://thchr..github.io/SymmetricTightBinding.jl/stable
-[coverage-img]:    https://codecov.io/gh/thchr/EmptyLattice.jl/branch/main/graph/badge.svg
-[coverage-url]:    https://codecov.io/gh/thchr/EmptyLattice.jl
+[coverage-img]:    https://codecov.io/gh/thchr/EmptyLattice.jl/branch/master/graph/badge.svg
+[coverage-url]:    https://codecov.io/gh/thchr/EmptyLattice.jl/tree/master
