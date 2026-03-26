@@ -14,5 +14,6 @@ using Test
         include("perturbation_theory/test_multiplicity.jl")
         include("perturbation_theory/test_p3_K.jl")
         include("perturbation_theory/test_constraint_phase.jl")
+        include("perturbation_theory/test_all_special_kpoints.jl")
     end
 end
