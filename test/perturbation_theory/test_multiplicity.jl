@@ -111,9 +111,9 @@ using EmptyLattice.PerturbationTheory
         end
 
         # Consequence: shifts sum to zero for any Δε (Tr W = 0).
-        for Δε in (Dict(SVector(1.0, 1.0) => 0.7),
-                   Dict(SVector(1.0, 1.0) => 0.3, SVector(0.0, 1.0) => -0.2),
-                   Dict(SVector(1.0, 0.0) => 1.0))
+        for Δε in (Dict([1,1] => 0.7, [0,1] => 0.0),
+                   Dict([1,1] => 0.3, [0,1] => -0.2),
+                   Dict([1,1] => 0.0, [0,1] => 1.0))
             shifts = evaluate(es, Δε)
             sv = only(values(shifts))
             @test length(sv) == 2
@@ -130,9 +130,8 @@ using EmptyLattice.PerturbationTheory
         lgirs = lgirreps(sgnum, Val(D))["K"]
 
         # degeneracy_idx=3 previously triggered "geometric factor matrix is not Hermitian"
-        # because G_K = C₃v lacks C₂, splitting the b-orbit of b and -b.  The fix uses
-        # the full space group (C₆v) for b_vector_orbits, which contains C₂ and merges
-        # the sub-orbits.  If the fix is working this call must not error.
+        # because G_K = C₃v lacks C₂, splitting the b-orbit of b and -b. Regression test:
+        # must not error
         es = frequency_shifts(lgirs, Gs, 3; polarization=:TM)
 
         @test es isa Collection{<:AbstractShiftExpr{2}}
@@ -145,12 +144,13 @@ using EmptyLattice.PerturbationTheory
             end
         end
 
-        # Must evaluate without error given any Δε.
-        non_empty = findfirst(e -> !isempty(e.terms), collect(es))
-        if non_empty !== nothing
-            t1 = es[non_empty].terms[1]
-            @test evaluate(es, Dict(t1.canonical_b => 0.5)) isa Dict
-        end
+        # Must evaluate without error given any Δε (4 orbits here)
+        cs = [.1, -.25, .3, .45]
+        Δε_fourier = Dict(b=>c for (b, c) in zip(canonical_orbits(es), cs))
+        Δωs = evaluate(es, Δε_fourier)
+        @test Δωs["K₁"] ≈ [-0.7937253933193771]
+        @test Δωs["K₂"] ≈ [-0.26457513110645897]
+        @test Δωs["K₃"] ≈ [-0.27005869997172216, 0.7992089621846402]
     end
 
 end
