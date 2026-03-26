@@ -6,7 +6,7 @@ Tools to compute photonic empty-lattice dispersion diagrams and associated symme
 
 To plot the empty-lattice band structure and simultaneously label the irreps at each of the high-symmetry **k**-points, we can leverage EmptyLattice.jl together with Crystalline.jl and Brillouin.jl:
 
-```jl
+```julia-repl
 julia> using Crystalline, EmptyLattice, Brillouin
 
 # pick a setting of interest (here, plane group p4)
@@ -39,21 +39,23 @@ julia> plot(kpi, freqs; annotations, ylims=(0,2), figure=(; size=(400, 600)))
 
 Which produces the following visualization of the empty-lattice band structure:
 
+<div align="center">
 <img src="assets/p4-empty-lattice-dispersion.png" alt="Empty-lattice dispersion in plane group <it>p</it>4" width="400"/>
+</div>
 
 ## Perturbation Theory
 
-The `PerturbationTheory` submodule computes first-order frequency shifts for a weak dielectric perturbation Δε(**r**) = Σ_**b** Δε_**b** e^(i**b**·**r**):
+The `PerturbationTheory` submodule computes first-order frequency shifts Δω<sup>(α)</sup> for a weak dielectric perturbation Δε(**r**) = Σ<sub><b>b</b></sub> Δε<sub><b>b</b></sub> e<sup>i<b>b</b>·<b>r</b></sup>:
 
-```
-Δω^(α) = −(ω/2ε) Σ_{[b]} A^(α)_{[b]} · Δε_**b**
-```
+<div align="center">
+Δω<sup>(α)</sup> = −(ω/2ε) Σ<sub>[<b>b</b>]</sub> <it>A</it><sup>(α)</sup><sub>[<b>b</b>]</sub> · Δε<sub><b>b</b></sub>
+</div>
 
-where the coefficients A^(α)_{[b]} are determined by the symmetry of the empty-lattice state at irrep α.
+where [<b>b</b>] denotes summation over a canonical representative of the symmetry-related Fourier coefficients in Δε(**r**), and where the coefficients <it>A</it><sup>(α)</sup><sub>[<b>b</b>]</sub> are determined by the symmetry of the empty-lattice state at irrep α.
 
 ### Example: plane group p4, M-point (TM polarization)
 
-```jl
+```julia-repl
 julia> using Crystalline, EmptyLattice, EmptyLattice.PerturbationTheory
 
 julia> D, sgnum = 2, 10  # plane group p4
@@ -63,7 +65,8 @@ julia> Gs    = dualbasis(Rs)
 julia> lgirs = lgirreps(sgnum, Val(D))["M"]   # irreps at M = [½, ½]
 
 # compute symbolic shift expressions for all irreps at the lowest degenerate frequency
-julia> es = frequency_shifts(lgirs, Gs, #=degeneracy_idx=# 1; polarization=:TM)
+julia> degeneracy_idx = 1 # which "degeneracy bundle" in the empty lattice to consider (1 = lowest)
+julia> es = frequency_shifts(lgirs, Gs, degeneracy_idx; polarization=:TM)
 4-element Collection{IrrepShiftExpr{2}} (TM, ω ≈ 0.7071):
 M₁: Δω = -(ω/2ε) (2Δε[1,0] + Δε[1,1])
 M₂: Δω = -(ω/2ε) (-2Δε[1,0] + Δε[1,1])
@@ -78,8 +81,9 @@ M₁: Δω = -(ω/2ε) (2Δε[1,0] + Δε[1,1])
     Δε[1,1] = Δε[1,-1] = Δε[-1,1] = Δε[-1,-1]
 
 # evaluate shift (Δωa/2πc) for concrete choices of canonical Fourier components Δε₁₀, Δε₁₁
+julia> ε = 1.44^2 # constant background permittivity of empty lattice before perturbation
 julia> Δε₁₀, Δε₁₁ = 0.2, 0.1
-julia> Δω = evaluate(es, Dict(#=Δε₁₀=# [1,0] => Δε₁₀, #=Δε₁₁=# [1,1] => Δε₁₁), #=ε=# 1.44^2)
+julia> Δω = evaluate(es, Dict([1,0] => Δε₁₀, [1,1] => Δε₁₁), ε)
 Dict{String, Float64} with 4 entries:
   "M₃" => 0.0170502
   "M₄" => 0.0170502
@@ -96,10 +100,12 @@ For more examples (including *M* > 1 and 3D), see [`docs/examples/perturbation_t
 
 In 2D settings, and with a Makie backend loaded, the real-space dielectric profile can be plotted directly from the orbit data:
 
-```jl
+```julia-repl
 julia> using GLMakie
 julia> os = orbits(es)                       # OrbitRelations for each b-orbit
 julia> plot_dielectric(os, [Δε₁₀, Δε₁₁], Rs) # contourf over the 2D unit cell
 ```
 
+<div align="center">
 <img src="assets/p4-dielectric-perturbation.png" alt="Dielectric perturbation for ε₁₀ = 0.2 & Δε₁₁ = 0.1 in plane group <it>p</it>4" width="400"/>
+</div>
