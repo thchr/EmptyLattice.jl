@@ -342,7 +342,7 @@ function planewave_symeigs(
 end
 
 function collect_irreps(
-    brs::Collection{NewBandRep{D}},
+    brs::Collection{BandRep{D, LGIrrep{D}, SiteIrrep{D}}},
     Gs::ReciprocalBasis{D},
     polarization::Union{Nothing, Symbol} = nothing;
     symeig_kws...
@@ -357,7 +357,7 @@ function collect_irreps(
 end
 
 function Crystalline.collect_irrep_annotations(
-    brs::Collection{NewBandRep{D}},
+    brs::Collection{BandRep{D, LGIrrep{D}, SiteIrrep{D}}},
     Gs::ReciprocalBasis{D},
     polarization::Union{Nothing, Symbol} = nothing;
     Nfreq = 50, # Bit of a hack right now to avoid issues relating to incomplete `kvGs` orbits
