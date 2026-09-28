@@ -271,7 +271,16 @@ function planewave_symeig(
             #     `planewave_symeig_polarization_factor` might return for inversions or
             #     roto-inversions, since it will never be invoked with such operations. In
             #     3D, the mirror polarization factor is always 0.0.
-            translation_term = cispi(2dot(kvG, w⁻¹)) # possible nonsymmorph contribution
+            translation_term = cispi(-2dot(kvG, w⁻¹)) # possible nonsymmorphic contribution
+            # NB: the minus sign here (↑) is the one that matches the phase convention of
+            #     Crystalline's `LGIrrep`s (following ISOTROPY, Bilbao, and Inui et al.; see
+            #     Crystalline issue #12) in taking `Dᵏ({R|w}) = exp(+2πi k⋅w) Dᵏ({R|0})`,
+            #     rather than the more natural opposite ("physical") convention. The reason
+            #     then need a minus sign here (seemingly contrary to Crystalline's + sign)
+            #     is that (under the `kvG` orbit-condition) we have `kvG ⋅ w⁻¹ = -(kvG ⋅ w)`,
+            #     so this is `exp(+2πi (k+G)⋅w)`. Getting this sign right is critical:
+            #     without it, the returned symmetry eigenvalues do not decompose into
+            #     `LGIrrep`s properly at the P/PA points of sgs 199, 206, 214, 220, 230.
             polarization_term = planewave_symeig_polarization_factor(W, polarization)
             return polarization_term * translation_term
         else

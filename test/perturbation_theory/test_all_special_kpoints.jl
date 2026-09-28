@@ -98,7 +98,9 @@ end
     # We expect successes > 0; the test records failures rather than failing hard
     @test successes > 0
     # Record the failure count so we can track regressions / improvements over time.
-    # Currently fails at P/PA points of I-centered cubic groups (199, 206, 214, 220, 230)
-    # This is essentially Crystalline.jl's issue #12, so it cannot be directly fixed here.
-    @test n_fail == 14  
+    # This previously failed at the P/PA points of the I-centered cubic groups (199, 206,
+    # 214, 220, 230), which was a sign error in the translation phase of `planewave_symeig`
+    # relative to the phase convention of Crystalline's `LGIrrep`s, not something inherent
+    # to Crystalline's issue #12.
+    @test n_fail == 0
 end
