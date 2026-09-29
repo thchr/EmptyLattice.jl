@@ -53,7 +53,7 @@ The `PerturbationTheory` submodule computes first-order frequency shifts Δω<su
 Δω<sup>(α)</sup> = −(ω/2ε) Σ<sub>[<b>b</b>]</sub> <it>A</it><sup>(α)</sup><sub>[<b>b</b>]</sub> · Δε<sub><b>b</b></sub>
 </div>
 
-where [<b>b</b>] denotes summation over a canonical representative of the symmetry-related Fourier coefficients in Δε(**r**), and where the coefficients <it>A</it><sup>(α)</sup><sub>[<b>b</b>]</sub> are determined by the symmetry of the empty-lattice state at irrep α.
+where [<b>b</b>] denotes summation over canonical representatives of the symmetry-related Fourier coefficients in Δε(**r**), and where the coefficients <it>A</it><sup>(α)</sup><sub>[<b>b</b>]</sub> are determined by the symmetry of the empty-lattice state at irrep α.
 
 ### Example: plane group p4, M-point (TM polarization)
 
@@ -75,7 +75,7 @@ julia> es = frequency_shifts(lgirs, Gs, degeneracy_idx; polarization=:TM)
  M₃: Δω = -(ω/2ε) (-Δε[1,1])
  M₄: Δω = -(ω/2ε) (-Δε[1,1])
 
-# inspect a single shift for more info
+# inspect a single shift for more info on symmetry-relations among Fourier components ("orbits")
 julia> es[1]
 M₁: Δω = -(ω/2ε) (2Δε[1,0] + Δε[1,1])
   orbits:
